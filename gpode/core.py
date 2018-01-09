@@ -1,4 +1,4 @@
-import multivariatenormal
+import .multivariatenormal
 
 
 class GaussianProcess:
