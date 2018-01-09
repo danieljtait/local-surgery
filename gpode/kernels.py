@@ -18,6 +18,15 @@ class Kernel:
             return self.kfunc(T1.ravel(), T2.ravel(), self.kpar).reshape(T1.shape)
 
 
+class CollectionKernel:
+    def __init__(self, kfunc, kpar=None):
+        self.kfunc = kfunc
+        self.kpar = kapr
+
+    def __call__(self, t1, t2, ind1, ind2):
+        return self.kfunc(t1, t2, ind1, ind2, self.kpar)
+
+
 def SquareExponKernel():                
     kfunc = lambda s, t, par: par[0]*np.exp(-par[1]*(s-t)**2)
     cls = Kernel(kfunc, [1., 1.])

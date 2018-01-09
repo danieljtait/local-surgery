@@ -41,7 +41,7 @@ class GaussianProcess:
 # arguments ind1, ind2 representing the cross covariance
 # between output y_ind1 and y_ind2
 class GaussianProcessCollection:
-    def __init__(self, collectionKernel, size)
+    def __init__(self, collectionKernel, size):
         self.kernel = collectionKernel
         self.size = size
 
