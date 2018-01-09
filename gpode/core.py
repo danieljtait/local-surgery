@@ -1,5 +1,6 @@
 from . import multivariatenormal
 
+import numpy as np
 
 class GaussianProcess:
     def __init__(self, kernel):
