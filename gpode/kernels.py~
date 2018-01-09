@@ -1,0 +1,5 @@
+
+class Kernel:
+    def __init__(self, kfunc, kpar=None):
+        self.kfunc = kfunc
+        self.kpar = kpar
