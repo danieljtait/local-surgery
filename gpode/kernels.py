@@ -21,7 +21,7 @@ class Kernel:
 class CollectionKernel:
     def __init__(self, kfunc, kpar=None):
         self.kfunc = kfunc
-        self.kpar = kapr
+        self.kpar = kpar
 
     def __call__(self, t1, t2, ind1, ind2):
         return self.kfunc(t1, t2, ind1, ind2, self.kpar)
