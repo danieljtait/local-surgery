@@ -1,3 +1,2 @@
 from .core import GaussianProcess
-
-import kernels
+from . import kernels
