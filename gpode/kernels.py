@@ -6,6 +6,10 @@ class Kernel:
         self.kpar = kpar
 
 
+    def __call__(self, t1, t2):
+        return self.kfunc(t1, t2, self.kpar)
+    
+
     def Cov(self, t1, t2=None):
         if isinstance(t1, np.ndarray):
             if t2 is None:
