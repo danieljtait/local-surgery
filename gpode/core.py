@@ -41,9 +41,8 @@ class GaussianProcess:
 # arguments ind1, ind2 representing the cross covariance
 # between output y_ind1 and y_ind2
 class GaussianProcessCollection:
-    def __init__(self, collectionKernel, size):
+    def __init__(self, collectionKernel):
         self.kernel = collectionKernel
-        self.size = size
 
         self.fittedValues = {'ts': None,
                              'xs': None,
@@ -56,25 +55,26 @@ class GaussianProcessCollection:
                 self.fittedValues['ts'] = inputPoints
 
         else:
-            self.fittedValues['ts'] = [inputPoints for i in range(self.size)]
+            self.fittedValues['ts'] = [inputPoints for i in range(self.kernel.size)]
 
         self.fittedValues['xs'] = dataPoints
 
 
-    def cov(self, s, t):
+    def cov(self):
         # Override .kernel(...) for 
         def _cov(s, t, p, q):
+            T, S = np.meshgrid(t, s)
             if p==q:
-                return 0.5*self.kernel(s, t, ind1=p, ind2=q)
+                return 0.5*self.kernel(S.ravel(), T.ravel(), ind1=p, ind2=q).reshape(S.shape)
             else:
-                return self.kernel(s, t, ind1=p, ind2=q)
+                return self.kernel(S.ravel(), T.ravel(), ind1=p, ind2=q).reshape(S.shape)
 
         ts = self.fittedValues['ts']
         N = sum(t.size for t in ts)
         result = np.zeros((N, N))
         nc = 0
         nr = 0
-        for t1, p in enumerate(ts):
+        for p, t1 in enumerate(ts):
             r = np.column_stack((_cov(t1, t2, p, q)
                                  for q, t2 in enumerate(ts[:p+1])))
             result[nc:nc+t1.size, :nr+t1.size] = r
