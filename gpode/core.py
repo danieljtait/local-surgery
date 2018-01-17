@@ -80,4 +80,8 @@ class GaussianProcessCollection:
             result[nc:nc+t1.size, :nr+t1.size] = r
             nc += t1.size
             nr += t1.size
-        return result + result.T
+        C = result + result.T
+        print(C==C.T)
+        print(np.linalg.eig(C)[0])
+        self.fittedValues['L'] = np.linalg.cholesky(C)
+        return C
