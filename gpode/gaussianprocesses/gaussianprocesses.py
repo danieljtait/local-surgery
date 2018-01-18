@@ -64,3 +64,6 @@ class GradientGaussianProcess(MultioutputGaussianProcess):
     @gradgp_fit
     def fit(self, x=None, dx=None):
         pass
+
+
+k = Kernels.MultioutputKernel.SquareExponKernel()
