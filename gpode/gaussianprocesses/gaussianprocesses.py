@@ -21,6 +21,10 @@ class MultioutputGaussianProcess(GaussianProcess):
         if isinstance(mokernel, kernels.MultioutputKernel):
             super(MultioutputGaussianProcess, self).__init__(mokernel, inputs)
 
+            self.Ls = {}
+            self.cross_covars = {}
+            self.fitted_outputs = {}
+
         # Initalisation failed
         else:
             raise ValueError
@@ -41,7 +45,8 @@ class MultioutputGaussianProcess(GaussianProcess):
         _outputs_w_data = sorted(_outputs_w_data)
         for i in _outputs_w_data:
             for j in _outputs_w_data:
-                self.fit_cov(i, j)
+                pass
+                #self.fit_cov(i, j)
             _outputs_w_data.remove(i)
 
 
@@ -66,4 +71,9 @@ class GradientGaussianProcess(MultioutputGaussianProcess):
         pass
 
 
-k = Kernels.MultioutputKernel.SquareExponKernel()
+import numpy as np
+k = kernels.GradientMultioutputKernel.SquareExponKernel()
+ss = np.linspace(0., 1., 3)
+
+gp = GradientGaussianProcess(k, inputs=ss)
+gp.fit(x=[0, 1, 2])
