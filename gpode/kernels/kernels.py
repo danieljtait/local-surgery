@@ -59,6 +59,18 @@ class GradientMultioutputKernel(MultioutputKernel):
     def __init__(self, kfunc, kpar=None):
         super(GradientMultioutputKernel, self).__init__(kfunc, kpar)
 
+    """
+    Example useage for the square exponential kernel
+
+    >>> ksqexp = GradientMultioutputKernel.SquareExponKernel()
+    >>> s = [0., 0.5]
+    >>> t = [0., 0.5, 1.]
+    >>> ksqexp.cov(0, 1, s, t)
+    # returns
+    #  np.array([[ cov{ X(x1) dX/dt(x2) for x2 in t ] for x1 in s]])
+    #
+    """
+
     @classmethod
     def SquareExponKernel(cls, kpar=None):
         if not isinstance(kpar, np.ndarray):
@@ -86,10 +98,3 @@ class GradientMultioutputKernel(MultioutputKernel):
                 return kdxdx(t1, t2, par)
 
         return cls(k, kpar)
-
-
-k = GradientMultioutputKernel.SquareExponKernel()
-
-tt = np.linspace(0., 1., 3)
-ss = np.linspace(0., 1., 2)
-print(k.cov(0, 1, ss, tt))
