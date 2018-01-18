@@ -1,0 +1,95 @@
+import numpy as np
+
+
+class Kernel:
+    def __init__(self, kfunc, kpar):
+        self.kfunc = kfunc  # Callable giving cov{Y(x1),Y(x2)}
+        self.kpar = kpar    # additional arguments to kfunc
+
+    def cov(self, x1, x2=None):
+        if not isinstance(x1, np.ndarray):
+            x1 = np.asarray(x1)
+
+        if not isinstance(x2, (float, list, np.ndarray)):
+            if x2 is None:
+                x2 = x1.copy()
+            else:
+                # What is it? - raise exception
+                raise ValueError
+
+        elif isinstance(x2, (float, list)):
+            x2 = np.asarray(x2)
+
+        T, S = np.meshgrid(x2, x1)
+        return self.kfunc(S.ravel(), T.ravel(), self.kpar).reshape(T.shape)
+
+
+##
+# Extends the Kernel class to model the covariance
+# between outputs Y_p(t) and Y_q(t), the callable kfunc
+# now has additional positional arguments p, q
+class MultioutputKernel(Kernel):
+    def __init__(self, kfunc, kpar):
+        super(MultioutputKernel, self).__init__(kfunc, kpar)
+
+    def cov(self, ind1, ind2, x1, x2=None):
+        if not isinstance(x1, np.ndarray):
+            x1 = np.asarray(x1)
+
+        if not isinstance(x2, (float, list, np.ndarray)):
+            if x2 is None:
+                x2 = x1.copy()
+            else:
+                # What is it? - raise exception
+                raise ValueError
+
+        elif isinstance(x2, (float, list)):
+            x2 = np.asarray(x2)
+
+        T, S = np.meshgrid(x2, x1)
+        return self.kfunc(ind1, ind2,
+                          S.ravel(), T.ravel(),
+                          self.kpar).reshape(T.shape)
+
+
+##
+# Special instance of the Multioutput framework
+# where the outputs correspond to Y(x1) and dY/dx(x2)
+class GradientMultioutputKernel(MultioutputKernel):
+    def __init__(self, kfunc, kpar=None):
+        super(GradientMultioutputKernel, self).__init__(kfunc, kpar)
+
+    @classmethod
+    def SquareExponKernel(cls, kpar=None):
+        if not isinstance(kpar, np.ndarray):
+            if kpar is None:
+                kpar = (1., 1.)
+
+        def kxx(s, t, par):
+            return par[0]*np.exp(-par[1]*(s-t)**2)
+
+        def kxdx(s, t, par):
+            return (2*par[0]*par[1]*(s-t)*np.exp(-par[1]*(s-t)**2))
+
+        def kdxdx(s, t, par):
+            return (2*par[0]*par[1]*(1-2*par[1]*(s-t)**2)*np.exp(
+                        -par[1]*(s-t)**2))
+
+        def k(ind1, ind2, t1, t2, par):
+            if ind1 == 0 and ind2 == 0:
+                return kxx(t1, t2, par)
+            elif ind1 == 0 and ind2 == 1:
+                return kxdx(t1, t2, par)
+            elif ind1 == 1 and ind2 == 0:
+                return kxdx(t2, t1, par)
+            elif ind1 == 1 and ind2 == 1:
+                return kdxdx(t1, t2, par)
+
+        return cls(k, kpar)
+
+
+k = GradientMultioutputKernel.SquareExponKernel()
+
+tt = np.linspace(0., 1., 3)
+ss = np.linspace(0., 1., 2)
+print(k.cov(0, 1, ss, tt))
