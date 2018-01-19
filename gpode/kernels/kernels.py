@@ -23,6 +23,12 @@ class Kernel:
         T, S = np.meshgrid(x2, x1)
         return self.kfunc(S.ravel(), T.ravel(), self.kpar).reshape(T.shape)
 
+    @classmethod
+    def SquareExponKernel(cls, kpar=None):
+        if not isinstance(kpar, np.ndarray):
+            if kpar is None:
+                kpar = (1., 1.)
+        return cls(lambda s, t, p: p[0]*np.exp(-p[1]*(s-t)**2), kpar)
 
 ##
 # Extends the Kernel class to model the covariance
