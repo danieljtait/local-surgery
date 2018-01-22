@@ -3,7 +3,23 @@ import json
 import itertools, collections
 import sympy
 from sympy.parsing import sympy_parser
+from gpode.gaussianprocesses import MultioutputGaussianProcess
+from gpode.kernels import MultioutputKernel
 
+
+
+
+class NestedIntegralGaussianProcess(MultioutputGaussianProcess):
+    pass
+
+####
+#
+#
+# Methods relating to loading covariance and mean functions from
+# stored sympy string resources
+#
+#
+#
 
 def lambda_from_sympystr(str_expr, symb_names):
     sympy_expr = sympy_parser.parse_expr(str_expr)
