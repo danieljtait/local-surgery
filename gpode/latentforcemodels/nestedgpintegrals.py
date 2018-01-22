@@ -75,6 +75,7 @@ class NestedGPIntegralCovarLoader(SympyStrToLambdaLoader):
     def load(cls, config):
         fname = config["fname"]
         snames = config["symb_names"]
+        print(config)
         try:
             with open(fname, 'r') as f:
                 data = f.read()
