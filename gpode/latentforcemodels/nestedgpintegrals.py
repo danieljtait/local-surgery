@@ -93,6 +93,6 @@ class NestedGPIntegralCovarLoader(SympyStrToLambdaLoader):
 
 
 def ngpintegrals_sqexpcovs():
-    config = {"fname": "myfile.txt",
+    config = {"fname": "myfile2.txt",
               "symb_names": ["s", "t", "s_0", "t_0", "theta_0", "theta_1"]}
     return NestedGPIntegralCovarLoader.load(config)
