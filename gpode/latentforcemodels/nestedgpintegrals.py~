@@ -1,0 +1,17 @@
+import scipy.special
+import json
+import itertools, collections
+import sympy
+from sympy.parsing import sympy_parser
+
+
+def lambda_from_sympystr(str_expr, symb_names):
+    sympy_expr = sympy_parser.parse_expr(str_expr)
+    free_symbols = [symb for symb in sympy_expr.free_symbols]
+
+    # Wish to collect the... order important
+    symb_map = collections.OrderedDict()
+    remaining_names = []  # symbols not found, but order still important
+    for name in symb_names:
+        
+    
