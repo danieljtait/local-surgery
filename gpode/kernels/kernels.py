@@ -2,10 +2,18 @@ import numpy as np
 from gpode.bayes import Parameter
 
 
+##
+# Attach a parameter to the kernel allowing for
+# specifications of priors, proposals etc.,
+# the val_map argument allows for some parameters
+# to be kept constant
 class KernelParameter(Parameter):
     def __init__(self, val_map, *args, **kwargs):
         super(KernelParameter, self).__init__(*args, **kwargs)
         self.val_map = val_map
+
+    def get_value(self):
+        return self.val_map(self.value)
 
 
 class Kernel:
@@ -34,8 +42,9 @@ class Kernel:
     def SquareExponKernel(cls, kpar=None):
         if not isinstance(kpar, np.ndarray):
             if kpar is None:
-                kpar = (1., 1.)
+                kpar = [1., 1.]
         return cls(lambda s, t, p: p[0]*np.exp(-p[1]*(s-t)**2), kpar)
+
 
 ##
 # Extends the Kernel class to model the covariance
@@ -47,7 +56,10 @@ class MultioutputKernel(Kernel):
 
     def cov(self, ind1, ind2, x1, x2=None, kpar=None):
         if kpar is None:
-            kpar = self.kpar
+            if isinstance(self.kpar, KernelParameter):
+                kpar = self.kpar.get_value()
+            else:
+                kpar = self.kpar
 
         if not isinstance(x1, np.ndarray):
             x1 = np.asarray(x1)
