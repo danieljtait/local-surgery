@@ -21,7 +21,10 @@ class Kernel:
         self.kfunc = kfunc  # Callable giving cov{Y(x1),Y(x2)}
         self.kpar = kpar    # additional arguments to kfunc
 
-    def cov(self, x1, x2=None):
+    def cov(self, x1, x2=None, kpar=None):
+        if kpar is None:
+            kpar = self.kpar
+
         if not isinstance(x1, np.ndarray):
             x1 = np.asarray(x1)
 
@@ -36,7 +39,7 @@ class Kernel:
             x2 = np.asarray(x2)
 
         T, S = np.meshgrid(x2, x1)
-        return self.kfunc(S.ravel(), T.ravel(), self.kpar).reshape(T.shape)
+        return self.kfunc(S.ravel(), T.ravel(), kpar).reshape(T.shape)
 
     @classmethod
     def SquareExponKernel(cls, kpar=None):

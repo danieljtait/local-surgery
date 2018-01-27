@@ -1,0 +1,25 @@
+import numpy as np
+
+
+def test1(mod):
+    from lindod_src import xk_post_conditional
+
+    k = 0
+    F = mod._dXdt(mod.latent_X, mod.As, mod.Gs)
+    X = mod.latent_X
+    As = mod.As
+    Gs = mod.Gs
+
+    fk = F[:, 0]
+    print(fk)
+    print(X[:, 1]*As[1][0, 1]*Gs[1])
+    #a = np.sum([mod.As[r][k, k]*g for r, g in enumerate(mod.Gs)], axis=0)
+    #print(a)
+    
+#    m, C = xk_post_conditional(k, mod.As, mod.Gs,
+#                               mod.sigmas, mod.gammas,
+#                               mod.data.Y, mod.latent_X,
+#                               mod._dmcs, mod._LCs, mod._dCs,
+#                               mod._dXdt, None)
+#
+#    print(m)

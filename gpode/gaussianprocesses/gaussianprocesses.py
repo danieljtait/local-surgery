@@ -49,6 +49,30 @@ class MultioutputGaussianProcess(GaussianProcess):
     def pred(self, inds, inputs=None):
         self._pred(inds, inputs)
 
+    def get_full_cov(self, inputs):
+        result = None
+        inds = [i for i in inputs.keys()]
+        while inds != []:
+            ind = inds[0]
+            row = [0.5*self.kernel.cov(ind, ind,
+                                       inputs[ind], inputs[ind])]
+            inds.remove(ind)
+            for ind2 in inds:
+                C12 = self.kernel.cov(ind, ind2,
+                                      inputs[ind], inputs[ind2])
+                row.append(C12)
+            row = np.column_stack((M for M in row))
+            if isinstance(result, np.ndarray):
+                Mzero = np.zeros((row.shape[0], result.shape[1]-row.shape[1]))
+                row = np.column_stack((Mzero, row))
+                result = np.row_stack((result, row))
+            else:
+                result = row
+
+        result = result + result.T
+
+        return result
+
     ##
     # Puts the model in a position to return predictive
     # distributions as desired

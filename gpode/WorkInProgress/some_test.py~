@@ -1,0 +1,7 @@
+import numpy as np
+
+tt = np.linspace(0., 1., 3)
+
+def C(s):
+    T_, S_ = np.meshgrid(tt, tt)
+    return np.exp(-s*(T_.ravel()-S_.ravel())**2)

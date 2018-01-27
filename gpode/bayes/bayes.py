@@ -26,6 +26,10 @@ def handle_prior_assignment(cls, tup):
         cls.prior_hyperpar = tup[1]
         cls.prior = scipy.stats.gamma(a=cls.prior_hyperpar[0],
                                       scale=cls.prior_hyperpar[1])
+    elif tup[0] == "unif":
+        cls.prior_hyperpar = tup[1]
+        cls.prior = scipy.stats.uniform(loc=tup[1][0],
+                                        scale=tup[1][1]-tup[1][0])
     else:
         raise ValueError
 

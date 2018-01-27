@@ -5,8 +5,7 @@ import sympy
 from sympy.parsing import sympy_parser
 from gpode.gaussianprocesses import MultioutputGaussianProcess
 from gpode.kernels import MultioutputKernel
-
-
+import os
 
 
 class NestedIntegralGaussianProcess(MultioutputGaussianProcess):
@@ -21,7 +20,7 @@ class NestedIntegralGaussianProcess(MultioutputGaussianProcess):
 #
 #
 
-def lambda_from_sympystr(str_expr, symb_names):
+def lambda_from_sympystr(str_expr, symb_names, print_it=False):
     sympy_expr = sympy_parser.parse_expr(str_expr)
     free_symbols = [symb for symb in sympy_expr.free_symbols]
 
@@ -31,12 +30,14 @@ def lambda_from_sympystr(str_expr, symb_names):
     for name in symb_names:
         name_found = False
         for symb in free_symbols:
-            symb_map[name] = symb
-            free_symbols.remove(symb)
-            name_found = True
-            break
+            if name == str(symb):
+                symb_map[name] = symb
+                free_symbols.remove(symb)
+                name_found = True
+                break
         if not name_found:
-            remaining_names.append(name)
+            symb_map[name] = sympy.Symbol(name)
+            #remaining_names.append(name)
 
     fun_args = tuple(item for item in
                      itertools.chain(symb_map.values(), remaining_names))
@@ -74,8 +75,12 @@ class NestedGPIntegralCovarLoader(SympyStrToLambdaLoader):
     @classmethod
     def load(cls, config):
         fname = config["fname"]
+
+        dirname = os.path.split(__file__)[0]
+        fname = os.path.join(dirname, fname)
+
         snames = config["symb_names"]
-        print(config)
+
         try:
             with open(fname, 'r') as f:
                 data = f.read()

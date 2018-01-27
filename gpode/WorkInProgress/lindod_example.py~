@@ -1,0 +1,10 @@
+from scipy.integrate import odeint
+from lindod_src import MGPLinearAdapGrad, Data
+
+A0 = np.array([[0.4, 0.],
+               [0.0, 0.]])
+A1 = np.array([[0.0, -1.],
+               [1.0, 0.]])
+
+tt = np.linspace(0., 3., 5)
+Y = odeint(
