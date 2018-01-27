@@ -38,7 +38,10 @@ class MultioutputKernel(Kernel):
     def __init__(self, kfunc, kpar):
         super(MultioutputKernel, self).__init__(kfunc, kpar)
 
-    def cov(self, ind1, ind2, x1, x2=None):
+    def cov(self, ind1, ind2, x1, x2=None, kpar=None):
+        if kpar is None:
+            kpar = self.kpar
+
         if not isinstance(x1, np.ndarray):
             x1 = np.asarray(x1)
 
@@ -55,7 +58,7 @@ class MultioutputKernel(Kernel):
         T, S = np.meshgrid(x2, x1)
         return self.kfunc(ind1, ind2,
                           S.ravel(), T.ravel(),
-                          self.kpar).reshape(T.shape)
+                          kpar).reshape(T.shape)
 
 
 ##
