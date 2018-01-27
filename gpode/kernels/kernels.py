@@ -1,4 +1,11 @@
 import numpy as np
+from gpode.bayes import Parameter
+
+
+class KernelParameter(Parameter):
+    def __init__(self, val_map, *args, **kwargs):
+        super(KernelParameter, self).__init__(*args, **kwargs)
+        self.val_map = val_map
 
 
 class Kernel:
