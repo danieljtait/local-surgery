@@ -3,9 +3,9 @@
 class DataLoader:
 
     @classmethod
-    def load(example, seed, times, noise_scales, *args, **kwargs):
+    def load(cls, example, seed, times, noise_scales, *args, **kwargs):
         if example == "bessel jn":
-            return bessel_jn_data(seed, times, **kwargs)
+            return bessel_jn_data(seed, times, noise_scales, **kwargs)
 
 
 def bessel_jn_data(seed,
