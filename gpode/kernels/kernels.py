@@ -66,6 +66,8 @@ class MultioutputKernel(Kernel):
         if kpar is None:
             if isinstance(self.kpar, KernelParameter):
                 kpar = self.kpar.get_value()
+            elif isinstance(self.kpar, ParameterCollection):
+                kpar = self.kpar.value()
             else:
                 kpar = self.kpar
 

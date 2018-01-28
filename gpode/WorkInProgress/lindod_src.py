@@ -14,6 +14,81 @@ class Data:
         self.Y = Y
 
 
+class MGPLinearAdapGrad3:
+    def __init__(self,
+                 xkp, lforce_ktype="sqexp"):
+
+        # kernel function for the GP modelling the xk-th trajectory
+        self._x_kernels = []
+        if lforce_ktype == "sqexp":
+            for kpar in xkp:
+                kern = GradientMultioutputKernel.SquareExponKernel(kpar)
+                self._x_kernels.append(kern)
+        else:
+            raise NotImplementedError
+
+    def model_setup(self, xkernels="prior"):
+        if xkernels == "prior":
+            for kern in self._x_kernels:
+                rv = kern.kpar.prior.rvs()
+                for p, x in zip(kern.kpar.parameters.values(), rv):
+                    p.value = x
+
+
+    def _phi_k_mh_update(self, k):
+        kern = self._x_kernels[k]
+        kpar = kern.kpar
+
+        new_val = kpar.proposal.rvs(kpar.value())
+
+        def _lgp_hyperpar_pdf(val):
+            # new cov parameters
+            Lxx, mdx_x, Cdxdx_x = _x_gp_pars(new_val,
+                                             kern,
+                                             self.data.time,
+                                             self.data._X[:, k])
+
+
+## Corresponds to equation (20) in
+#
+def _norm_quad_form(x, L):
+    return -0.5*np.dot(x, np.linalg.solve(L.T, np.linalg.solve(L, x)))
+
+
+def _log_eq20(X, As, Gs, dXdt,
+              gammas, sigmas,
+              LCs, dms, dCs, k=-1,
+              phi_k_val=None, phi_k_prior=None):
+
+    if k < 0:
+        kiter = range(X.shape[1])
+    else:
+        kiter = [k]
+
+    exp_arg = 0.
+    F = dXdt(X, As, Gs)
+
+    for k in kiter:
+
+        # Contribution from the data trajectory expert
+        LC = LCs[k]       # chol. decomp of the cov for the data expert
+        exp_arg += _norm_quad_form(X[:, k], LC)
+
+        # Contribution for the gradient expert
+        fk = F[:, k]
+        mk = dms[k]
+        etak = fk - mk
+
+        S = dCs[k] + np.diag(gammas[k]*np.ones(dCs[k].shape[0]))
+        dLd_x = np.linalg.cholesky(S)
+        exp_arg += _norm_quad_form(etak, dLd_x)
+
+    if phi_k_prior is not None:
+        exp_arg += np.log(phi_k_prior.pdf(phi_k_val))
+
+    return exp_arg
+
+
 class MGPLinearAdapGrad2:
     def __init__(self, As, data, sigmas, kpars, lforce_ktype="sqexp"):
 

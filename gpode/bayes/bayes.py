@@ -65,8 +65,36 @@ class Parameter:
 
 
 class ParameterCollection:
-    def __init__(self, parameters):
+    def __init__(self, parameters, independent=False):
         self.parameters = OrderedDict((p.name, p) for p in parameters)
+        self.independent_collection = independent
+
+        if independent:
+            def _pdf(xx):
+                ps = [p.prior.pdf(x)
+                      for p, x in zip(self.parameters.values(), xx)]
+                return np.prod(ps)
+
+            def _rvs():
+                rv = [p.prior.rvs() for p in self.parameters.values()]
+                return rv
+            self.prior = ProbabilityDistribution(_pdf, _rvs)
+
+            def _qpdf(xx, xcur):
+                qs = [p.proposal.pdf(x, xc)
+                      for p, x, xc in zip(self.parameters.values(), xx, xcur)]
+                return qs
+
+            # Note at the moment this returns a column vector
+            def _qrvs(xcur):
+                rv = [p.proposal.rvs(x)
+                      for p, x in zip(self.parameters.values(), xcur)]
+                return rv
+
+            is_sym = all([p.proposal.is_symmetric
+                          for p in self.parameters.values()])
+
+            self.proposal = ProposalDistribution(_qpdf, _qrvs, is_sym)
 
     def value(self, np_arrayfy=False, arr_shape=None):
         v = [item[1].value for item in self.parameters.items()]

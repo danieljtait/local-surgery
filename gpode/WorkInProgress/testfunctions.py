@@ -43,6 +43,27 @@ def test1(mod):
         cov_invs.append(Cinv)
     """
 
+def test2(mod):
+    ### Tests the update step for _phi_k_mh_update
+    from gpode.bayes import Parameter, ParameterCollection
+    from lindod_src import MGPLinearAdapGrad3
+
+    K = 2
+    xkp = []
+    for k in range(K):
+        p1 = Parameter("phi_{}_1".format(k),
+                       prior=("gamma", (4, 0.2)),
+                       proposal=("normal rw", 0.1))
+        p2 = Parameter("phi_{}_2".format(k),
+                       prior=("gamma", (4, 0.2)),
+                       proposal=("normal rw", 0.1))
+        phi_k = ParameterCollection([p1, p2], independent=True)
+        xkp.append(phi_k)
+
+    m = MGPLinearAdapGrad3(xkp)
+    m.model_setup()
+    m._X = mod.latent_X
+    m._phi_k_mh_update(0)
 
 #########
 #
