@@ -1,13 +1,20 @@
-from scipy.special import jn
-from scipy.misc import derivative as deriv
-import numpy as np
+
+
+class DataLoader:
+
+    @classmethod
+    def load(example, seed, times, noise_scales, *args, **kwargs):
+        if example == "bessel jn":
+            return bessel_jn_data(seed, times, **kwargs)
 
 
 def bessel_jn_data(seed,
                    times,
                    noise_scales,
                    order=1):
-
+    from scipy.special import jn
+    from scipy.misc import derivative as deriv
+    import numpy as np
     np.random.seed(seed)
 
     A0 = np.array([[0., 1.0],

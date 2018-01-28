@@ -5,10 +5,10 @@ from gpode.kernels import Kernel
 
 p1 = Parameter("p1",
                prior=("gamma", (4, 0.2)),
-               proposal=("normal rw", (0.1,)))
+               proposal=("normal rw", 0.1))
 
 p2 = Parameter("p2", prior=("gamma", (4, 0.2)),
-               proposal=("normal rw", (0.1,)))
+               proposal=("normal rw", 0.1))
 
 
 phi_k = ParameterCollection([p1, p2], independent=True)
