@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from testfunctions import *
 
+np.random.seed(11)
 
 A0 = np.array([[0.0, 0.],
                [0.0, 0.]])

@@ -1,0 +1,16 @@
+###########################################################
+#                                                         #
+# Fits the multiplicative linear force model              #
+#                                                         #
+#                                                         #
+#               __R                                       #
+#       dX /    \           (r)                           #
+#         /dt = /_  g_r(t) A   x(t),                      #
+#                r=0                                      #
+#                                                         #
+# where g_0(t) = 1 and g_r(t) ~ GP(0,k(t,t')) by using    #
+# a version of the AdaptiveGradient matching approach     #
+# in Dondlinger et. al adapted for this special case in   #
+# which many of the conditional posteriors reduce to      #
+# Gaussian random variables                               #
+###########################################################

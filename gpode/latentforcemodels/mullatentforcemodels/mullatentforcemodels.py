@@ -1,0 +1,4 @@
+
+
+class Mul:
+    pass

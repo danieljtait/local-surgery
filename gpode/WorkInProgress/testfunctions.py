@@ -46,7 +46,9 @@ def test1(mod):
 def test2(mod):
     ### Tests the update step for _phi_k_mh_update
     from gpode.bayes import Parameter, ParameterCollection
-    from lindod_src import MGPLinearAdapGrad3
+    from lindod_src import MGPLinearAdapGrad3, _log_eq20_k, _x_gp_pars
+    from scipy.optimize import minimize
+    import matplotlib.pyplot as plt
 
     K = 2
     xkp = []
@@ -62,9 +64,65 @@ def test2(mod):
 
     m = MGPLinearAdapGrad3(xkp)
     m.model_setup()
+    m.data = mod.data
     m._X = mod.latent_X
-    m._phi_k_mh_update(0)
+    m._dXdt = mod._dXdt
+    m._As = mod.As
+    m._Gs = mod.Gs
+    m._gammas = mod.gammas
 
+    rv_phi_0 = []
+    rv_phi_1 = []
+    N_SIM = 2000
+    BURN_IN = N_SIM/4
+    for nt in range(N_SIM):
+        for k in range(2):
+            m._phi_k_mh_update(k)
+        if nt > BURN_IN and nt % 10 == 0:
+            rv_phi_0.append(m._x_kernels[0].kpar.value())
+            rv_phi_1.append(m._x_kernels[1].kpar.value())
+
+    rv_phi_0 = np.array(rv_phi_0)
+    rv_phi_1 = np.array(rv_phi_1)
+
+    fig1 = plt.figure()
+    ax = fig1.add_subplot(121)
+    ax.plot(rv_phi_0)
+    ax = fig1.add_subplot(122)
+    ax.plot(rv_phi_1)
+
+    print(np.mean(rv_phi_0, axis=0))
+    print(np.mean(rv_phi_1, axis=0))
+
+    def objfunc(z):
+        try:
+            val = 0.
+            zks = [z[:2], z[2:]]
+            for k, zk in enumerate(zks):
+                kern = m._x_kernels[k]
+                kpar = kern.kpar
+
+                xk = m._X[:, k]
+                fk = m._dXdt(m._X, m._As, m._Gs)[:, k]
+
+                Lxx, mdx_x, Cdxdx_x = _x_gp_pars(zk,
+                                                 kern,
+                                                 m.data.time,
+                                                 m._X[:, k])
+
+                val += _log_eq20_k(xk, fk, mdx_x,
+                                   Lxx, Cdxdx_x,
+                                   m._gammas[k],
+                                   phi_k_val=zk, phi_k_prior=kpar.prior)
+            return -val
+        except:
+            return np.inf
+
+    res = minimize(objfunc, np.ones(4))
+    print(res.x[:2])
+    print(res.x[2:])
+
+    plt.show()
 #########
 #
 # parse the expression exp(-0.5*(fk - mk)K^{-1}(fk-mk))
