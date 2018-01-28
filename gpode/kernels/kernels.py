@@ -1,5 +1,5 @@
 import numpy as np
-from gpode.bayes import Parameter
+from gpode.bayes import Parameter, ParameterCollection
 
 
 ##
@@ -23,7 +23,12 @@ class Kernel:
 
     def cov(self, x1, x2=None, kpar=None):
         if kpar is None:
-            kpar = self.kpar
+            if isinstance(self.kpar, KernelParameter):
+                kpar = self.kpar.get_value()
+            elif isinstance(self.kpar, ParameterCollection):
+                kpar = self.kpar.value()
+            else:
+                kpar = self.kpar
 
         if not isinstance(x1, np.ndarray):
             x1 = np.asarray(x1)
