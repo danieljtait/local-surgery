@@ -1,5 +1,6 @@
 import numpy as np
-
+from lindod_src import MGPLinearAdapGrad3
+import matplotlib.pyplot as plt
 
 def test1(mod):
     from lindod_src import xk_post_conditional
@@ -43,8 +44,9 @@ def test1(mod):
         cov_invs.append(Cinv)
     """
 
+
 def test2(mod):
-    ### Tests the update step for _phi_k_mh_update
+    # Tests the update step for _phi_k_mh_update
     from gpode.bayes import Parameter, ParameterCollection
     from lindod_src import MGPLinearAdapGrad3, _log_eq20_k, _x_gp_pars
     from scipy.optimize import minimize
@@ -123,6 +125,71 @@ def test2(mod):
     print(res.x[2:])
 
     plt.show()
+
+
+def test3(mod):
+    from lindod_src import _log_eq20
+    from scipy.stats import norm
+    from scipy.optimize import minimize
+    m = mlfm_setup(mod)
+
+    m._sigmas = [0.1, 0.1]
+
+    def f(x, k):
+        _X = m._X.copy()
+        _X[:, k] = x
+        return _log_eq20(_X, m._As, m._Gs,
+                         m._Lxxs, m._mdxs, m._dCds,
+                         m._gammas, m._dXdt)
+
+    def g(x, k):
+        return np.sum(norm.logpdf(m.data.Y[:, k], loc=x, scale=m._sigmas[k]))
+
+    k = 0
+    res = minimize(lambda z: -f(z, k),
+                   x0=m.data.Y[:, k])
+    print(res)
+
+#    plt.plot(m.data.time, res.x, '+')
+#    plt.plot(m.data.time, m.data.Y[:, k], 's')
+#    plt.show()
+
+def mlfm_setup(mod):
+    from gpode.bayes import Parameter, ParameterCollection
+    from lindod_src import _x_gp_pars
+    K = 2
+    xkp = []
+    for k in range(K):
+        p1 = Parameter("phi_{}_1".format(k),
+                       prior=("gamma", (4, 0.2)),
+                       proposal=("normal rw", 0.1))
+        p2 = Parameter("phi_{}_2".format(k),
+                       prior=("gamma", (4, 0.2)),
+                       proposal=("normal rw", 0.1))
+        phi_k = ParameterCollection([p1, p2], independent=True)
+        xkp.append(phi_k)
+
+    m = MGPLinearAdapGrad3(xkp)
+    m.model_setup()
+    m.data = mod.data
+    m._X = mod.latent_X
+    m._dXdt = mod._dXdt
+    m._As = mod.As
+    m._Gs = mod.Gs
+    m._gammas = mod.gammas
+    m._sigmas = mod.sigmas
+    m._Lxxs = []
+    m._mdxs = []
+    m._dCds = []
+    for i, kern in enumerate(m._x_kernels):
+        Lxx, mdx_x, Cdxdx_x = _x_gp_pars(kern.kpar.value(), kern,
+                                         m.data.time,
+                                         m._X[:, i])
+        m._Lxxs.append(Lxx)
+        m._mdxs.append(mdx_x)
+        m._dCds.append(Cdxdx_x)
+    return m
+
 #########
 #
 # parse the expression exp(-0.5*(fk - mk)K^{-1}(fk-mk))

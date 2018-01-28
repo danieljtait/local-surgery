@@ -94,6 +94,29 @@ def _log_eq20_k(xk, fk, mk,
 
     return exp_arg
 
+
+def _log_eq20(X, As, Gs,
+              Lxxs, mdxs, dCds,
+              gammas, dXdt,
+              phi_vals=None, phi_priors=None):
+
+    if phi_priors is None:
+        phi_priors = [None for k in range(X.shape[1])]
+        phi_vals = [None for k in range(X.shape[1])]
+
+    F = dXdt(X, As, Gs)
+    val = 0.
+
+    for k in range(X.shape[1]):
+
+        val += _log_eq20_k(X[:, k], F[:, k], mdxs[k],
+                           Lxxs[k], dCds[k], gammas[k],
+                           phi_k_val=phi_vals[k], phi_k_prior=phi_priors[k])
+
+    return val
+
+
+"""
 def _log_eq20(X, As, Gs, dXdt,
               gammas, sigmas,
               LCs, dms, dCs, k=-1,
@@ -126,7 +149,7 @@ def _log_eq20(X, As, Gs, dXdt,
         exp_arg += np.log(phi_k_prior.pdf(phi_k_val))
 
     return exp_arg
-
+"""
 
 class MGPLinearAdapGrad2:
     def __init__(self, As, data, sigmas, kpars, lforce_ktype="sqexp"):

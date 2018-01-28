@@ -2,12 +2,6 @@ import numpy as np
 from gpode.kernels import GradientMultioutputKernel
 
 
-class Data:
-    def __init__(self, t, Y):
-        self.time = t
-        self.Y = Y
-
-
 ###########################################################
 #                                                         #
 # Fits the multiplicative linear force model              #
@@ -26,11 +20,7 @@ class Data:
 ###########################################################
 class MulLatentForceModel_adapgrad:
     def __init__(self,
-                 xkp, lforce_ktype="sqexp",
-                 data_time=None,
-                 data_Y=None):
-
-        self.data = Data(data_time, data_Y)
+                 xkp, lforce_ktype="sqexp"):
 
         # kernel function for the GP modelling the xk-th trajectory
         self._x_kernels = []

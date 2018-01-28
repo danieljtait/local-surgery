@@ -48,7 +48,7 @@ for k, kern in enumerate(mod.latent_gp_kernels):
     mod._update_stored_xgp_pars(k, kern)
 
 
-test2(mod)
+test3(mod)
 
 """
 fig = plt.figure()

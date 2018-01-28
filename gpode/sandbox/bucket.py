@@ -19,6 +19,4 @@ ax.plot(td, deriv(lambda z: jn(order, z), x0=td, dx=1e-6),
         'k-.', alpha=0.2)
 ax.plot(bd["time"], bd["Y"], 's')
 
-
-
 plt.show()
