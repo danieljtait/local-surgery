@@ -71,10 +71,23 @@ Some utility functions
 """
 
 
+##
+# Backsub
+#
+def _back_sub(L, x):
+    return np.linalg.solve(L.T, np.linalg.solve(L, x))
+
+
+##
+# Attaches the covariance function of
+#
+# [] we should probably store the cholesky decomposition
+#    of Cdxdx_x + gamma_k**2*I
 def _store_gpdx_covs(mobj):
     mobj.Lxx = []
     mobj.Cxdx = []
-    mobj.Cdxdx_x = []
+    mobj.S_chol = []
+#    mobj.Cdxdx_x = []
 
     tt = mobj.data.time
     for k in range(mobj.data.Y.shape[1]):
@@ -85,14 +98,13 @@ def _store_gpdx_covs(mobj):
         Cxdx = kern.cov(0, 1, tt, tt)
         Cdxdx = kern.cov(1, 1, tt, tt)
 
-        Cdxdx_x = np.linalg.solve(Cxdx.T,
-                                  np.linalg.solve(Lxx.T, np.linalg.solve(Lxx, Cxdx)))
-
-        Cdxdx_x = Cdxdx - Cdxdx_x
+        Cdxdx_x = Cdxdx - np.dot(Cxdx.T, _back_sub(Lxx, Cxdx))
+        S = Cdxdx_x + mobj.gammas[k].value
+        S_chol = np.linalg.cholesky(S)
 
         mobj.Lxx.append(Lxx)
         mobj.Cxdx.append(Cxdx)
-        mobj.Cdxdx_x.append(Cdxdx_x)
+        mobj.S_chol.append(S_chol)
 
 
 ###
