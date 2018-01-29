@@ -34,6 +34,8 @@ class MulLatentForceModel_adapgrad:
                  data_Y=None):
 
         self.data = Data(data_time, data_Y)
+        self.sigmas = sigmas
+        self.gammas = gammas
 
         # kernel function for the GP modelling the xk-th trajectory
         self._x_kernels = []
@@ -44,6 +46,30 @@ class MulLatentForceModel_adapgrad:
         else:
             raise NotImplementedError
 
+        self._init_parameters()
+
+    def _init_parameters(self):
+        self._init_sigmas()
+        self._init_gammas()
+        self._init_latent_x_kpar()
+
+        # Attach the gradient cov matrices
+        _store_gpdx_covs(self)
+
+    def _init_sigmas(self, strategy="prior"):
+        for s in self.sigmas:
+            s.value = s.prior.rvs()
+
+    def _init_gammas(self, strategy="prior"):
+        for g in self.gammas:
+            g.value = g.prior.rvs()
+
+    def _init_latent_x_kpar(self):
+        for kern in self._x_kernels:
+            rv = kern.kpar.prior.rvs()
+            for p, x in zip(kern.kpar.parameters.values(),
+                            rv):
+                p.value = x
 
 """
 Functions describing the model

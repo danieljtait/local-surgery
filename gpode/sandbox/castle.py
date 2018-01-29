@@ -8,6 +8,7 @@ MLFM = lfm.MulLatentForceModel_adapgrad
 tt = np.linspace(0.5, 10., 10)
 bd = DataLoader.load("bessel jn", 11, tt, [0.1, 0.05],
                      order=2)
+np.random.seed()  # Reseed the generator seeded in DataLoader
 
 K = 2
 xkp = []
