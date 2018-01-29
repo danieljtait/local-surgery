@@ -21,7 +21,20 @@ for k in range(K):
     phi_k = ParameterCollection([p1, p2], independent=True)
     xkp.append(phi_k)
 
+# Make the obs. noise parameters
+sigmas = [Parameter("sigma_{}".format(k),
+                    prior=("gamma", (4, 0.2)),
+                    proposal=("normal rw", 0.1))
+          for k in range(K)]
+
+# Make the grad. noise parameters
+gammas = [Parameter("sigma_{}".format(k),
+                    prior=("gamma", (4, 0.2)),
+                    proposal=("normal rw", 0.1))
+          for k in range(K)]
 
 m = MLFM(xkp,
+         sigmas, gammas,
+         As=bd["As"],
          data_time=bd["time"],
          data_Y=bd["Y"])

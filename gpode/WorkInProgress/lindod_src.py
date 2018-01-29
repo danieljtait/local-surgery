@@ -78,16 +78,16 @@ def _norm_quad_form(x, L):
 
 
 ## Corresponds to equation (20) in
-def _log_eq20_k(xk, fk, mk,
+def _log_eq20_k(fk, mk,
                 Lxx, dCd_x, gamma_k,
                 phi_k_val=None, phi_k_prior=None):
 
-    exp_arg = _norm_quad_form(xk, Lxx)
+#    exp_arg = _norm_quad_form(fk-mk, Lxx)
 
-    S = dCd_x + gamma_k*np.diag(np.ones(xk.size))
+    S = dCd_x + np.diag(gamma_k**2*np.ones(fk.size))
     dLd_x = np.linalg.cholesky(S)
 
-    exp_arg += _norm_quad_form(fk-mk, dLd_x)
+    exp_arg = _norm_quad_form(fk-mk, dLd_x)
 
     if phi_k_prior is not None:
         exp_arg += np.log(phi_k_prior.pdf(phi_k_val))
@@ -109,7 +109,7 @@ def _log_eq20(X, As, Gs,
 
     for k in range(X.shape[1]):
 
-        val += _log_eq20_k(X[:, k], F[:, k], mdxs[k],
+        val += _log_eq20_k(F[:, k], mdxs[k],
                            Lxxs[k], dCds[k], gammas[k],
                            phi_k_val=phi_vals[k], phi_k_prior=phi_priors[k])
 

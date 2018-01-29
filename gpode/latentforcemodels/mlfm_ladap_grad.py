@@ -26,7 +26,10 @@ class Data:
 ###########################################################
 class MulLatentForceModel_adapgrad:
     def __init__(self,
-                 xkp, lforce_ktype="sqexp",
+                 xkp,
+                 sigmas, gammas,
+                 lforce_ktype="sqexp",
+                 As=None,
                  data_time=None,
                  data_Y=None):
 

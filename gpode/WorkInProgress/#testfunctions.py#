@@ -271,6 +271,8 @@ def test4(mod):
     m._gammas = [0.1, 0.1]
     m._sigmas = [0.5, 0.3]
 
+    
+
 def mlfm_setup(mod):
     from gpode.bayes import Parameter, ParameterCollection
     from lindod_src import _x_gp_pars

@@ -14,13 +14,13 @@ from testfunctions import *
 
 np.random.seed(11)
 
-A0 = np.array([[0.0, 0.],
-               [0.0, 0.]])
+A0 = np.array([[0.2, .1],
+               [0.0, -0.1]])
 A1 = np.array([[0.0, -1.],
                [1.0, 0.]])
 
 x0 = np.array([1., 0.])
-tt = np.linspace(0., 3., 5)
+tt = np.linspace(0., 3., 3)
 Y = odeint(lambda x, t: np.dot(A0 + np.cos(t)*A1, x), x0, tt)
 
 data = Data(tt, Y)
