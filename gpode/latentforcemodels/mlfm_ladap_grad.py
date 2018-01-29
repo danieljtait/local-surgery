@@ -71,6 +71,30 @@ Some utility functions
 """
 
 
+def _store_gpdx_covs(mobj):
+    mobj.Lxx = []
+    mobj.Cxdx = []
+    mobj.Cdxdx_x = []
+
+    tt = mobj.data.time
+    for k in range(mobj.data.Y.shape[1]):
+        kern = mobj._x_kernels[k]
+
+        Cxx = kern.cov(0, 0, tt, tt)
+        Lxx = np.linalg.cholesky(Cxx)
+        Cxdx = kern.cov(0, 1, tt, tt)
+        Cdxdx = kern.cov(1, 1, tt, tt)
+
+        Cdxdx_x = np.linalg.solve(Cxdx.T,
+                                  np.linalg.solve(Lxx.T, np.linalg.solve(Lxx, Cxdx)))
+
+        Cdxdx_x = Cdxdx - Cdxdx_x
+
+        mobj.Lxx.append(Lxx)
+        mobj.Cxdx.append(Cxdx)
+        mobj.Cdxdx_x.append(Cdxdx_x)
+
+
 ###
 # returns the value of the quad. form
 #
