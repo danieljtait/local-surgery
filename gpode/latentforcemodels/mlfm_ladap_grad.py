@@ -81,7 +81,7 @@ def _log_eq20_k(xk, fk, mk,
                 phi_k_val=None, phi_k_prior=None):
     exp_arg = _norm_quad_form(xk, Lxx)
 
-    S = dCd_x + gamma_k*np.diag(np.ones(xk.size))
+    S = dCd_x + gamma_k**2*np.diag(np.ones(xk.size))
     dLd_x = np.linalg.cholesky(S)
 
     exp_arg += _norm_quad_form(fk-mk, dLd_x)
@@ -125,7 +125,8 @@ def _store_gpdx_covs(mobj):
         Cdxdx = kern.cov(1, 1, tt, tt)
 
         Cdxdx_x = Cdxdx - np.dot(Cxdx.T, _back_sub(Lxx, Cxdx))
-        S = Cdxdx_x + mobj.gammas[k].value
+        I = np.diag(np.ones(Cdxdx_x.shape[0]))
+        S = Cdxdx_x + np.diag(mobj.gammas[k].value**2*I)
         S_chol = np.linalg.cholesky(S)
 
         mobj.Lxx.append(Lxx)
