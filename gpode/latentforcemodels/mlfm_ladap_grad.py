@@ -34,6 +34,11 @@ class MulLatentForceModel_adapgrad:
                  data_Y=None):
 
         self.data = Data(data_time, data_Y)
+        self.N = self.data.Y.shape[0]
+        self.K = self.data.Y.shape[1]
+
+        self._As = As
+
         self.sigmas = sigmas
         self.gammas = gammas
 
@@ -70,6 +75,19 @@ class MulLatentForceModel_adapgrad:
             for p, x in zip(kern.kpar.parameters.values(),
                             rv):
                 p.value = x
+
+    def _dXdt(self, X):
+        F = []
+        for k in range(self.K):
+            vv = []
+            for j in range(self.K):
+                vj = np.sum([self._As[r][k, j]*g
+                             for r, g in enumerate(self._Gs)], axis=0)
+                vv.append(vj)
+            fk = np.sum([v*x for x, v in zip(X.T, vv)], axis=0)
+            F.append(fk)
+        return np.array(F).T
+
 
 """
 Functions describing the model

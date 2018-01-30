@@ -39,3 +39,6 @@ m = MLFM(xkp,
          As=bd["As"],
          data_time=bd["time"],
          data_Y=bd["Y"])
+
+m._Gs = [np.ones(bd["time"].size)] + bd["Gs"]
+
