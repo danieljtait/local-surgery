@@ -2,13 +2,17 @@ import numpy as np
 from gpode import latentforcemodels as lfm
 from gpode.examples import DataLoader
 from gpode.bayes import Parameter, ParameterCollection
+from scipy.optimize import minimize
+from scipy.special import jn
+import matplotlib.pyplot as plt
+
 
 MLFM = lfm.MulLatentForceModel_adapgrad
 
 tt = np.linspace(0.5, 10., 10)
 bd = DataLoader.load("bessel jn", 11, tt, [0.1, 0.05],
                      order=2)
-np.random.seed()  # Reseed the generator seeded in DataLoader
+#np.random.seed()  # Reseed the generator seeded in DataLoader
 
 K = 2
 xkp = []
@@ -42,3 +46,30 @@ m = MLFM(xkp,
 
 m._Gs = [np.ones(bd["time"].size)] + bd["Gs"]
 
+X = m.data.Y.copy()
+
+i = 0
+
+
+def obj_func(xi):
+    _X = X.copy()
+    _X[:, i] = xi
+    return -m._log_eq20(_X)
+
+
+res = minimize(obj_func, X[:, i])
+np.set_printoptions(precision=2)
+
+print(res)
+print(res.x)
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+
+_tt = np.linspace(tt[0], tt[-1], 100)
+ax.plot(_tt, jn(2, _tt), 'k-', alpha=0.2)
+
+ax.plot(m.data.time, res.x)
+ax.plot(m.data.time, m.data.Y[:, i], 's')
+
+plt.show()

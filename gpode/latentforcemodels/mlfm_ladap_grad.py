@@ -76,6 +76,11 @@ class MulLatentForceModel_adapgrad:
                             rv):
                 p.value = x
 
+    ##
+    # Should be a cleaner way of doing this, something like
+    #
+    # sum_r [ g_r * <A_r,x> for x in X ]
+    #
     def _dXdt(self, X):
         F = []
         for k in range(self.K):
@@ -87,6 +92,24 @@ class MulLatentForceModel_adapgrad:
             fk = np.sum([v*x for x, v in zip(X.T, vv)], axis=0)
             F.append(fk)
         return np.array(F).T
+
+    def _log_eq20(self, X=None):
+        if X is None:
+            X = self._X
+
+        F = self._dXdt(X)
+
+        exp_arg = 0.
+        for k in range(self.K):
+            Lxx = self.Lxx[k]
+            Cxdx = self.Cxdx[k]
+            mk = np.dot(Cxdx.T, _back_sub(Lxx, X[:, k]))
+
+            exp_arg += self._log_eq20_k(X[:, k], F[:, k], mk, k)
+        return exp_arg
+
+    def _log_eq20_k(self, xk, fk, mk, k):
+        return _norm_quad_form(fk - mk, self.S_chol[k])
 
 
 """
@@ -113,6 +136,58 @@ def _log_eq20_k(xk, fk, mk,
 """
 Some utility functions
 """
+
+
+###
+# For the component k
+def _parse_component_k_for_xi(mobj, i, k, ret_inv=False):
+
+    Lxx = mobj.Lxx[k]
+    Cxdx = mobj.Cxdx[k]
+    S_chol = mobj.S_chol[k]
+
+    vv = []
+    for j in range(mobj.data.Y.shape[1]):
+        vj = np.sum([mobj._As[r][k, j]*g
+                     for r, g in enumerate(mobj._Gs)], axis=0)
+        vv.append(vj)
+
+    if i != k:
+        xk = mobj._X[:, k]
+
+        da = np.diag(vv[i])
+        mk = np.dot(Cxdx.T, _back_sub(Lxx, xk))
+
+        b = mk - np.sum([v*mobj._X[:, j] for j, v in enumerate(vv)
+                         if j != i], axis=0)
+
+        cov_inv = np.dot(da, _back_sub(S_chol, da))
+
+        mean = np.dot(np.linalg.pinv(da), b)
+        if ret_inv:
+            return mean, cov_inv
+
+        else:
+            return mean, np.linalg.inv(cov_inv)
+
+    else:
+        I = np.diag(np.ones(Lxx.shape[0]))
+        T = np.dot(Cxdx.T, np.linalg.solve(Lxx.T, np.linalg.solve(Lxx, I)))
+
+        b = - np.sum([v*mobj._X[:, j] for j, v in enumerate(vv)
+                      if j != i], axis=0)
+
+        A = np.diag(vv[i]) - T
+
+        cov_inv = np.dot(A.T, _back_sub(S_chol, A))
+        w1 = np.dot(b, _back_sub(S_chol, A))
+
+        mean = np.linalg.solve(cov_inv, w1)
+
+        if ret_inv:
+            return mean, cov_inv
+        else:
+            return mean, np.linalg.pinv(cov_inv)
 
 
 ##
