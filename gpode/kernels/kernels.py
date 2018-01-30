@@ -18,7 +18,23 @@ class KernelParameter(Parameter):
 
 class SEParameterCollection(ParameterCollection):
     def __init__(self, theta0, theta1, *args, **kwargs):
-        super(ParameterCollection, self).__init__([theta0, theta1])
+        super(SEParameterCollection, self).__init__([theta0, theta1],
+                                                    *args, **kwargs)
+
+    def _dcov_dtheta(self, theta, tt):
+        T, S = np.meshgrid(tt, tt)
+        dtsq = (T.ravel()-S.ravel())**2
+        v1 = np.exp(-theta[1]*dtsq)
+        v2 = -theta[0]*dtsq*v1
+        return v1.reshape(T.shape), v2.reshape(T.shape)
+
+    def _dcov_dtheta0(self, theta0, theta1, tt, cov=None):
+        return cov/theta0
+
+    def _dcov_dtheta1(self, theta0, theta1, tt):
+        T, S = np.meshgrid(tt)
+        dtsq = (S.ravel()-T.ravel())**2
+        return -theta0*dtsq*np.exp(-theta1*dtsq).reshape(T.shape)
 
 
 class Kernel:
