@@ -226,6 +226,33 @@ def _parse_component_k_for_xi(mobj, i, k, ret_inv=False):
             return mean, np.linalg.pinv(cov_inv)
 
 
+def _parse_component_k_for_gr(mobj, r, k, ret_inv=True):
+
+    Lxx = mobj.Lxx[k]
+    Cxdx = mobj.Cxdx[k]
+    S_chol = mobj.S_chol[k]
+
+    vv = []
+    for s in range(mobj.R):
+        vs = np.sum([mobj._As[s][k, j]*x
+                     for j, x in enumerate(mobj._X.T)], axis=0)
+        vv.append(vs)
+
+    da = np.diag(vv[r])
+
+    mk = np.dot(Cxdx.T, _back_sub(Lxx, mobj._X[:, k]))
+    b = mk - np.sum([v*mobj._Gs[s] for s, v in enumerate(vv)
+                     if s != r], axis=0)
+
+    cov_inv = np.dot(da, _back_sub(S_chol, da))
+    mean = np.linalg.solve(da, b)
+
+    if ret_inv:
+        return mean, cov_inv
+    else:
+        return mean, np.linalg.inv(cov_inv)
+
+
 ##
 # Backsub
 #
