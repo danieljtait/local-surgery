@@ -42,7 +42,7 @@ def _log_eq20_k(xk, fk, mk,
                 phi_k_val=None, phi_k_prior=None):
     exp_arg = _norm_quad_form(xk, Lxx)
 
-    S = dCd_x + gamma_k*np.diag(np.ones(xk.size))
+    S = dCd_x + gamma_k**2*np.diag(np.ones(xk.size))
     dLd_x = np.linalg.cholesky(S)
 
     exp_arg += _norm_quad_form(fk-mk, dLd_x)
