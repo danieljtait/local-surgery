@@ -1,5 +1,5 @@
 import numpy as np
-from gpode.kernels import GradientMultioutputKernel
+from gpode.kernels import Kernel, GradientMultioutputKernel
 
 
 class Data:
@@ -27,6 +27,7 @@ class Data:
 class MulLatentForceModel_adapgrad:
     def __init__(self,
                  xkp,
+                 gkp,
                  sigmas, gammas,
                  lforce_ktype="sqexp",
                  As=None,
@@ -38,6 +39,8 @@ class MulLatentForceModel_adapgrad:
         self.K = self.data.Y.shape[1]
 
         self._As = As
+        if As is not None:
+            self.R = len(As)
 
         self.sigmas = sigmas
         self.gammas = gammas
@@ -51,12 +54,18 @@ class MulLatentForceModel_adapgrad:
         else:
             raise NotImplementedError
 
+        self._g_kernels = []
+        for kpar in gkp:
+            kern = Kernel.SquareExponKernel(kpar)
+            self._g_kernels.append(kern)
+
         self._init_parameters()
 
     def _init_parameters(self):
         self._init_sigmas()
         self._init_gammas()
         self._init_latent_x_kpar()
+        self._init_latent_g_kpar()
 
         # Attach the gradient cov matrices
         _store_gpdx_covs(self)
@@ -71,6 +80,13 @@ class MulLatentForceModel_adapgrad:
 
     def _init_latent_x_kpar(self):
         for kern in self._x_kernels:
+            rv = kern.kpar.prior.rvs()
+            for p, x in zip(kern.kpar.parameters.values(),
+                            rv):
+                p.value = x
+
+    def _init_latent_g_kpar(self):
+        for kern in self._g_kernels:
             rv = kern.kpar.prior.rvs()
             for p, x in zip(kern.kpar.parameters.values(),
                             rv):
@@ -98,33 +114,56 @@ class MulLatentForceModel_adapgrad:
         ms.append(m)
         inv_covs.append(ci)
 
-        print(len(ms))
-
         mean, cov = _prod_norm_pars(ms, inv_covs)
         return mean, cov
+
+    def _get_gr_conditional(self, r):
+        ms = []
+        inv_covs = []
+        for k in range(self.K):
+            m, ci = self._parse_component_k_for_gr(r, k, True)
+            if m is None:
+                pass
+            else:
+                ms.append(m)
+                inv_covs.append(ci)
+
+        # Contribution from the prior
+        Cgg = self._g_kernels[r-1].cov(self.data.time)
+
+        ms.append(np.zeros(Cgg.shape[0]))
+        inv_covs.append(np.linalg.inv(Cgg))
+
+        return _prod_norm_pars(ms, inv_covs)
 
     ##
     # Should be a cleaner way of doing this, something like
     #
     # sum_r [ g_r * <A_r,x> for x in X ]
     #
-    def _dXdt(self, X):
+    def _dXdt(self, X, Gs):
+
+        if Gs is None:
+            Gs = self._Gs
+
         F = []
         for k in range(self.K):
             vv = []
             for j in range(self.K):
                 vj = np.sum([self._As[r][k, j]*g
-                             for r, g in enumerate(self._Gs)], axis=0)
+                             for r, g in enumerate(Gs)], axis=0)
                 vv.append(vj)
             fk = np.sum([v*x for x, v in zip(X.T, vv)], axis=0)
             F.append(fk)
         return np.array(F).T
 
-    def _log_eq20(self, X=None):
+    def _log_eq20(self, X=None, Gs=None):
         if X is None:
             X = self._X
+        if Gs is None:
+            Gs = self._Gs
 
-        F = self._dXdt(X)
+        F = self._dXdt(X, Gs)
 
         exp_arg = 0.
         for k in range(self.K):
@@ -147,6 +186,8 @@ class MulLatentForceModel_adapgrad:
     def _parse_component_k_for_xi(self, i, k, ret_inv=False):
         return _parse_component_k_for_xi(self, i, k, ret_inv)
 
+    def _parse_component_k_for_gr(self, r, k, ret_inv=False):
+        return _parse_component_k_for_gr(self, r, k, ret_inv)
 
 """
 Functions describing the model
@@ -238,19 +279,22 @@ def _parse_component_k_for_gr(mobj, r, k, ret_inv=True):
                      for j, x in enumerate(mobj._X.T)], axis=0)
         vv.append(vs)
 
-    da = np.diag(vv[r])
+    if np.all(vv[r] == 0):
+        return None, None
 
-    mk = np.dot(Cxdx.T, _back_sub(Lxx, mobj._X[:, k]))
-    b = mk - np.sum([v*mobj._Gs[s] for s, v in enumerate(vv)
-                     if s != r], axis=0)
-
-    cov_inv = np.dot(da, _back_sub(S_chol, da))
-    mean = np.linalg.solve(da, b)
-
-    if ret_inv:
-        return mean, cov_inv
     else:
-        return mean, np.linalg.inv(cov_inv)
+        da = np.diag(vv[r])
+        mk = np.dot(Cxdx.T, _back_sub(Lxx, mobj._X[:, k]))
+        b = mk - np.sum([v*mobj._Gs[s] for s, v in enumerate(vv)
+                         if s != r], axis=0)
+
+        cov_inv = np.dot(da, _back_sub(S_chol, da))
+        mean = np.linalg.solve(da, b)
+
+        if ret_inv:
+            return mean, cov_inv
+        else:
+            return mean, np.linalg.inv(cov_inv)
 
 
 ##
@@ -307,10 +351,17 @@ def _norm_quad_form(x, L):
 def _prod_norm_pars(means, inv_covs):
     m1 = means[0]
     C1inv = inv_covs[0]
-    for m2, C2inv in zip(means[1:], inv_covs[1:]):
-        Cnew_inv = C1inv + C2inv
-        mnew = np.linalg.solve(Cnew_inv, np.dot(C1inv, m1) + np.dot(C2inv, m2))
-        m1 = mnew
-        C1inv = Cnew_inv
 
-    return mnew, np.linalg.inv(Cnew_inv)
+    if len(means) == 1:
+        return m1, np.linalg.inv(C1inv)
+
+    else:
+
+        for m2, C2inv in zip(means[1:], inv_covs[1:]):
+            Cnew_inv = C1inv + C2inv
+            mnew = np.linalg.solve(Cnew_inv,
+                                   np.dot(C1inv, m1) + np.dot(C2inv, m2))
+            m1 = mnew
+            C1inv = Cnew_inv
+
+        return mnew, np.linalg.inv(Cnew_inv)

@@ -12,7 +12,7 @@ np.set_printoptions(precision=4)
 
 MLFM = lfm.MulLatentForceModel_adapgrad
 
-tt = np.linspace(0.5, 10., 10)
+tt = np.linspace(.5, 10., 10)
 bd = DataLoader.load("bessel jn", 11, tt, [0.1, 0.05],
                      order=2)
 #np.random.seed()  # Reseed the generator seeded in DataLoader
@@ -29,6 +29,17 @@ for k in range(K):
     phi_k = ParameterCollection([p1, p2], independent=True)
     xkp.append(phi_k)
 
+gkp = []
+for r in range(2):
+    p1 = Parameter("psi_{}_1".format(r+1),
+                   prior=("gamma", (4, 0.2)),
+                   proposal=("normal rw", 0.1))
+    p2 = Parameter("psi_{}_2".format(r+1),
+                   prior=("gamma", (4, 0.2)),
+                   proposal=("normal rw", 0.1))
+    psi_r = ParameterCollection([p1, p2], independent=True)
+    gkp.append(psi_r)
+
 # Make the obs. noise parameters
 sigmas = [Parameter("sigma_{}".format(k),
                     prior=("gamma", (4, 0.2)),
@@ -41,7 +52,7 @@ gammas = [Parameter("sigma_{}".format(k),
                     proposal=("normal rw", 0.1))
           for k in range(K)]
 
-m = MLFM(xkp,
+m = MLFM(xkp, gkp,
          sigmas, gammas,
          As=bd["As"],
          data_time=bd["time"],
@@ -52,22 +63,43 @@ m._Gs = [np.ones(bd["time"].size)] + bd["Gs"]
 X = m.data.Y.copy()
 m._X = X
 
+
+def obj_func(gr, r):
+    _Gs = [g.copy() for g in m._Gs]
+    _Gs[r] = gr
+
+    return -m._log_eq20(Gs=_Gs)
+
+
+r = 1
+res = minimize(obj_func, np.zeros(m.N), args=(r, ))
+
+
+for r in [1, 2]:
+    mgr, cgr = m._get_gr_conditional(r)
+    sd = np.sqrt(np.diag(cgr))
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    _tt = np.linspace(tt[0], tt[-1], 100)
+    if r == 1:
+        _yy = 2**2/_tt - 1
+    else:
+        _yy = -1/_tt
+
+    dx = 0.1
+    for t, y, s in zip(tt, mgr, sd):
+        ax.plot([t, t], [y-sd, y+sd], 'k-')
+#        ax.plot([t-dx, t+dx], [y-sd, y-sd], 'k-')
+#    ax.fill_between(tt, mgr + 2*sd, mgr - 2*sd, alpha=0.2)
+    ax.plot(_tt, _yy, 'k-', alpha=0.5)
+    ax.plot(m.data.time, mgr, 'o')
+
 for i in [0, 1]:
 
-    def obj_func(xi):
-        _X = X.copy()
-        _X[:, i] = xi
-
-        data_term = np.sum(norm.logpdf(m.data.Y[:, i],
-                                       loc=xi, scale=m.sigmas[i].value))
-
-        return -m._log_eq20(_X) - data_term
-
-    res = minimize(obj_func, X[:, i])
     xi_cm, xi_ccov = m._get_xi_conditional(i)
-
-    print(res.x)
-    print(xi_cm)
+    sd = np.sqrt(np.diag(xi_ccov))
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
@@ -79,8 +111,9 @@ for i in [0, 1]:
         _yy = deriv(lambda z: jn(2, z), x0=_tt, dx=1e-6)
 
     ax.plot(_tt, _yy, 'k-', alpha=0.2)
+    for _i, t in enumerate(tt):
+        ax.plot([t, t], [xi_cm[_i]-sd[_i], xi_cm[_i]+sd[_i]], 'k-', alpha=0.5)
 
-    ax.plot(m.data.time, res.x)
     ax.plot(m.data.time, xi_cm, 'o')
     ax.plot(m.data.time, m.data.Y[:, i], 's')
 

@@ -16,6 +16,11 @@ class KernelParameter(Parameter):
         return self.val_map(self.value)
 
 
+class SEParameterCollection(ParameterCollection):
+    def __init__(self, theta0, theta1, *args, **kwargs):
+        super(ParameterCollection, self).__init__([theta0, theta1])
+
+
 class Kernel:
     def __init__(self, kfunc, kpar):
         self.kfunc = kfunc  # Callable giving cov{Y(x1),Y(x2)}
