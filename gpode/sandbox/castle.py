@@ -47,6 +47,7 @@ m = MLFM(xkp,
 m._Gs = [np.ones(bd["time"].size)] + bd["Gs"]
 
 X = m.data.Y.copy()
+m._X = X
 
 i = 0
 
@@ -60,7 +61,14 @@ def obj_func(xi):
 res = minimize(obj_func, X[:, i])
 np.set_printoptions(precision=2)
 
-print(res)
+#print(res)
+#print(res.x)
+
+m0, cinv0 = m._parse_component_k_for_xi(i, 0, True)
+m1, cinv1 = m._parse_component_k_for_xi(i, 1, True)
+Sinv = cinv0 + cinv1
+y = np.dot(cinv0, m0) + np.dot(cinv1, m1)
+print(np.linalg.solve(Sinv, y))
 print(res.x)
 
 fig = plt.figure()

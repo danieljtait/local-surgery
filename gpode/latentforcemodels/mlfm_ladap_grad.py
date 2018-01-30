@@ -109,7 +109,16 @@ class MulLatentForceModel_adapgrad:
         return exp_arg
 
     def _log_eq20_k(self, xk, fk, mk, k):
-        return _norm_quad_form(fk - mk, self.S_chol[k])
+        # Component from the GP prior on xk
+        val1 = _norm_quad_form(xk, self.Lxx[k])
+
+        # Component from the gradient expert
+        val2 = _norm_quad_form(fk - mk, self.S_chol[k])
+
+        return val1 + val2
+
+    def _parse_component_k_for_xi(self, i, k, ret_inv=False):
+        return _parse_component_k_for_xi(self, i, k, ret_inv)
 
 
 """
@@ -237,3 +246,17 @@ def _store_gpdx_covs(mobj):
 ####
 def _norm_quad_form(x, L):
     return -0.5*np.dot(x, np.linalg.solve(L.T, np.linalg.solve(L, x)))
+
+
+##
+#  p(x) ∝ Π N(x, means[k] | inv_covs[k])
+def _prod_norm_pars(means, inv_covs):
+    m1 = means[0]
+    C1inv = inv_covs[0]
+    for m2, C2inv in zip(means[1:], inv_covs[1:]):
+        Cnew_inv = C1inv + C2inv
+        mnew = np.linalg.solve(Cnew_inv, np.dot(C1inv, m1) + np.dot(C2inv, m2))
+        m1 = mnew
+        C1inv = Cnew_inv
+
+    return mnew, np.linalg.inv(Cnew_inv)
