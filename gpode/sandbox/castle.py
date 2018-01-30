@@ -4,8 +4,11 @@ from gpode.examples import DataLoader
 from gpode.bayes import Parameter, ParameterCollection
 from scipy.optimize import minimize
 from scipy.special import jn
+from scipy.misc import derivative as deriv
+from scipy.stats import norm
 import matplotlib.pyplot as plt
 
+np.set_printoptions(precision=2)
 
 MLFM = lfm.MulLatentForceModel_adapgrad
 
@@ -49,35 +52,36 @@ m._Gs = [np.ones(bd["time"].size)] + bd["Gs"]
 X = m.data.Y.copy()
 m._X = X
 
-i = 0
 
+for i in [0, 1]:
 
-def obj_func(xi):
-    _X = X.copy()
-    _X[:, i] = xi
-    return -m._log_eq20(_X)
+    def obj_func(xi):
+        _X = X.copy()
+        _X[:, i] = xi
 
+        data_term = np.sum(norm.logpdf(m.data.Y[:, i],
+                                       loc=xi, scale=m.sigmas[i].value))
 
-res = minimize(obj_func, X[:, i])
-np.set_printoptions(precision=2)
+        return -m._log_eq20(_X) - data_term
 
-#print(res)
-#print(res.x)
+    res = minimize(obj_func, X[:, i])
+    xi_cm, xi_ccov = m._get_xi_conditional(i)
 
-m0, cinv0 = m._parse_component_k_for_xi(i, 0, True)
-m1, cinv1 = m._parse_component_k_for_xi(i, 1, True)
-Sinv = cinv0 + cinv1
-y = np.dot(cinv0, m0) + np.dot(cinv1, m1)
-print(np.linalg.solve(Sinv, y))
-print(res.x)
+    print(res.x == xi_cm)
 
-fig = plt.figure()
-ax = fig.add_subplot(111)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
 
-_tt = np.linspace(tt[0], tt[-1], 100)
-ax.plot(_tt, jn(2, _tt), 'k-', alpha=0.2)
+    _tt = np.linspace(tt[0], tt[-1], 100)
+    if i == 0:
+        _yy = jn(2, _tt)
+    else:
+        _yy = deriv(lambda z: jn(2, z), x0=_tt, dx=1e-6)
 
-ax.plot(m.data.time, res.x)
-ax.plot(m.data.time, m.data.Y[:, i], 's')
+    ax.plot(_tt, _yy, 'k-', alpha=0.2)
+
+    ax.plot(m.data.time, res.x)
+    ax.plot(m.data.time, xi_cm, 'o')
+    ax.plot(m.data.time, m.data.Y[:, i], 's')
 
 plt.show()

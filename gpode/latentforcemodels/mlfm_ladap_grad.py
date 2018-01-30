@@ -76,6 +76,33 @@ class MulLatentForceModel_adapgrad:
                             rv):
                 p.value = x
 
+    def _get_xi_conditional(self, i):
+        ms = []
+        inv_covs = []
+        for k in range(self.K):
+            m, ci = self._parse_component_k_for_xi(i, k, True)
+            ms.append(m)
+            inv_covs.append(ci)
+
+        # We also need to add the prior contribution term for xi
+        Li = self.Lxx[i]
+        ci_inv = _back_sub(Li, np.diag(np.ones(Li.shape[0])))
+        m = np.zeros(Li.shape[0])
+        ms.append(m)
+        inv_covs.append(ci_inv)
+
+        # And finally the contribution from the data
+#        m = self.data.Y[:, i]
+#        ci = np.diag(1./self.sigmas[i].value**2 * np.ones(self.N))
+
+#        ms.append(m)
+#        inv_covs.append(ci_inv)
+
+        print(len(ms))
+
+        mean, cov = _prod_norm_pars(ms, inv_covs)
+        return mean, cov
+
     ##
     # Should be a cleaner way of doing this, something like
     #
