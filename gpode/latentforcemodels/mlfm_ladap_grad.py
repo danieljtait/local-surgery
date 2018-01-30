@@ -86,17 +86,17 @@ class MulLatentForceModel_adapgrad:
 
         # We also need to add the prior contribution term for xi
         Li = self.Lxx[i]
-        ci_inv = _back_sub(Li, np.diag(np.ones(Li.shape[0])))
+        ci = _back_sub(Li, np.diag(np.ones(Li.shape[0])))
         m = np.zeros(Li.shape[0])
         ms.append(m)
-        inv_covs.append(ci_inv)
+        inv_covs.append(ci)
 
         # And finally the contribution from the data
-#        m = self.data.Y[:, i]
-#        ci = np.diag(1./self.sigmas[i].value**2 * np.ones(self.N))
+        m = self.data.Y[:, i]
+        ci = np.diag(1./self.sigmas[i].value**2 * np.ones(self.N))
 
-#        ms.append(m)
-#        inv_covs.append(ci_inv)
+        ms.append(m)
+        inv_covs.append(ci)
 
         print(len(ms))
 

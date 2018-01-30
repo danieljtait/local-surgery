@@ -8,7 +8,7 @@ from scipy.misc import derivative as deriv
 from scipy.stats import norm
 import matplotlib.pyplot as plt
 
-np.set_printoptions(precision=2)
+np.set_printoptions(precision=4)
 
 MLFM = lfm.MulLatentForceModel_adapgrad
 
@@ -52,7 +52,6 @@ m._Gs = [np.ones(bd["time"].size)] + bd["Gs"]
 X = m.data.Y.copy()
 m._X = X
 
-
 for i in [0, 1]:
 
     def obj_func(xi):
@@ -67,7 +66,8 @@ for i in [0, 1]:
     res = minimize(obj_func, X[:, i])
     xi_cm, xi_ccov = m._get_xi_conditional(i)
 
-    print(res.x == xi_cm)
+    print(res.x)
+    print(xi_cm)
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
