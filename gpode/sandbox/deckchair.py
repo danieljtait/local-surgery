@@ -1,7 +1,10 @@
 import numpy as np
 from gpode.bayes import Parameter
 from gpode.kernels import SEParameterCollection, Kernel
-from scipy.stats import multivariate_normal
+from scipy.stats import gamma, multivariate_normal
+import scipy.special
+from scipy.misc import derivative
+
 
 np.set_printoptions(precision=4)
 np.random.seed(11)
@@ -28,8 +31,10 @@ z = np.dot(L, np.random.normal(size=tt.size))
 
 def ell(psi_val):
     cov = kern.cov(tt, kpar=psi_val)
-    return multivariate_normal.logpdf(z, mean=np.zeros(tt.size),
-                                      cov=cov)
+    lp = multivariate_normal.logpdf(z, mean=np.zeros(tt.size),
+                                    cov=cov)
+    lprior = psi.prior.logpdf(psi_val)
+    return lp + lprior
 
 
 def dLdC(y, C):
@@ -49,11 +54,12 @@ eps = 1e-6
 psip = psi.value()
 psip[0] += eps
 
+print(psi.prior.logpdf(psi.value(), deriv=True))
 print((ell(psip)-l)/eps)
-print(np.sum(dLdC(z, C) * C/psi.value()[0]))
+print(np.sum(dLdC(z, C) * C/psi.value()[0]) + psi.prior.logpdf(psi.value(), deriv=True)[0])
 
 psip = psi.value()
 psip[1] += eps
 
-print((ell(psip)-l)/eps)
-print(np.sum(dLdC(z, C) * dCdpsi(psi.value()[1], psi.value()[0])))
+#print((ell(psip)-l)/eps)
+#print(np.sum(dLdC(z, C) * dCdpsi(psi.value()[1], psi.value()[0])))

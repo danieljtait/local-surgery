@@ -1,2 +1,3 @@
 from .bayes import (Parameter,
-                    ParameterCollection)
+                    ParameterCollection,
+                    HamiltonianMonteCarlo)
