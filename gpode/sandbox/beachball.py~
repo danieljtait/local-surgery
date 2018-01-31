@@ -1,0 +1,16 @@
+import numpy as np
+from gpode import latentforcemodels as lfm
+from gpode.examples import DataLoader
+from scipy.optimize import minimize
+from scipy.special import jn
+from scipy.misc import derivative as deriv
+from scipy.stats import norm
+import matplotlib.pyplot as plt
+
+np.set_printoptions(precision=4)
+
+MLFM = lfm.MulLatentForceModel_adapgrad
+
+tt = np.linspace(.8, 3.5, 4)
+bd = DataLoader.load("bessel jn", 11, tt, [0.05, 0.05],
+                     order=2)

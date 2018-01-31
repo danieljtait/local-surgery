@@ -1,6 +1,7 @@
 import numpy as np
 from gpode.kernels import Kernel, GradientMultioutputKernel
-from scipy.stats import norm
+from scipy.stats import norm, multivariate_normal
+from gpode.bayes import HamiltonianMonteCarlo
 
 
 class Data:
@@ -84,9 +85,22 @@ class MulLatentForceModel_adapgrad:
             except:
                 pass
 
+        # Question: any covar. that need to be updated after this step?
+        for r in range(1, self.R):
+            try:
+                self.gibbs_update_psi_r(r)
+            except:
+                pass
+
     def gibbs_update_xi(self, i):
         cond_mean, cond_cov = self._get_xi_conditional(i)
-        L = np.linalg.cholesky(cond_cov)
+
+        try:
+            L = np.linalg.cholesky(cond_cov)
+        except:
+            cond_cov += np.diag(1e-5*np.ones(cond_mean.size))
+            L = np.linalg.cholesky(cond_cov)
+
         xi_rv = np.dot(L, np.random.normal(size=L.shape[0])) + cond_mean
         self._X[:, i] = xi_rv
 
@@ -95,7 +109,11 @@ class MulLatentForceModel_adapgrad:
         assert(r >= 1)
 
         cond_mean, cond_cov = self._get_gr_conditional(r)
-        L = np.linalg.cholesky(cond_cov)
+        try:
+            L = np.linalg.cholesky(cond_cov)
+        except:
+            cond_cov += np.diag(1e-5*np.ones(cond_mean.size))
+            L = np.linalg.cholesky(cond_cov)
         gr_rv = np.dot(L, np.random.normal(size=L.shape[0])) + cond_mean
         self._Gs[r] = gr_rv
 
@@ -119,8 +137,66 @@ class MulLatentForceModel_adapgrad:
             sigma_i.value = snew
 
     def gibbs_update_psi_r(self, r):
-        pass
+        # Hamiltonian Monte Carlo update
 
+        _tt = self.data.time
+        _T, _S = np.meshgrid(_tt, _tt)
+        dtsq = (_T.ravel() - _S.ravel())**2
+        dtsq = dtsq.reshape(_T.shape)
+
+        k_r = self._g_kernels[r-1]
+        psi_r = k_r.kpar
+        gr = self._Gs[r]
+
+        def _dLdC(psi_r_val):
+            C = k_r.cov(_tt, _tt, psi_r_val)
+            Cinv = np.linalg.inv(C)
+            return -0.5*(Cinv - np.dot(Cinv, np.dot(np.outer(gr, gr), Cinv)))
+
+        def _dCdpsi_0(psi_r_val):
+            return np.exp(-psi_r_val[1]*dtsq)
+
+        def _dCdpsi_1(psi_r_val):
+            return -psi_r_val[0]*dtsq*np.exp(-psi_r_val[1]*dtsq)
+
+        def _l(psi_r_val):
+            C = k_r.cov(_tt, _tt, psi_r_val)
+            lval = multivariate_normal.logpdf(gr,
+                                              mean=np.zeros(_tt.size),
+                                              cov=C)
+            lprior = psi_r.prior.logpdf(psi_r_val)
+            return lval + lprior
+
+        def _lgrad(psi_r_val):
+            dldc = _dLdC(psi_r_val)
+
+            dprior = psi_r.prior.logpdf(psi_r_val, deriv=True)
+            dldp = np.array([np.sum(dldc*_dCdpsi_0(psi_r_val)),
+                             np.sum(dldc*_dCdpsi_1(psi_r_val))])
+
+            return dprior + dldp
+
+        psi_r_new_val = psi_r.proposal.rvs(psi_r.value())
+
+        A = np.exp(_l(psi_r_new_val) - _l(psi_r.value()))
+        if np.random.uniform() <= A:
+            for x, p in zip(psi_r_new_val, psi_r.parameters.values()):
+                p.value = x
+
+        """
+        eps = 1e-6
+        x = psi_r.value()
+        xp = x.copy()
+        xp[1] += eps
+
+        hmc = HamiltonianMonteCarlo(lambda x: -_l(x),
+                                    lambda x: -_lgrad(x),
+                                    0.0025)
+
+        new_val = hmc.sample(psi_r.value())
+        for x, p in zip(new_val, psi_r.parameters.values()):
+            p.value = x
+        """
     def gibbs_update_phi_i(self, i):
         k_i = self._x_kernels[i]
         phi_i = k_i.kpar

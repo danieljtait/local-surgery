@@ -35,7 +35,11 @@ class GammaDistribution:
             return scipy.stats.gamma.logpdf(x, a=self.a, scale=self.scale)
 
     def rvs(self, size=1):
-        return scipy.stats.gamma.rvs(a=self.a, scale=self.scale, size=size)
+        res = scipy.stats.gamma.rvs(a=self.a, scale=self.scale, size=size)
+        if size == 1:
+            return float(res)
+        else:
+            return res
 
 
 class ProposalDistribution(ProbabilityDistribution):
