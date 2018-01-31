@@ -1,5 +1,6 @@
 import numpy as np
 from gpode.kernels import Kernel, GradientMultioutputKernel
+from scipy.stats import norm
 
 
 class Data:
@@ -60,6 +61,151 @@ class MulLatentForceModel_adapgrad:
             self._g_kernels.append(kern)
 
         self._init_parameters()
+
+    def gibbs_update_step(self):
+        for i in range(self.K):
+            self.gibbs_update_xi(i)
+
+        for r in range(1, self.R):
+            self.gibbs_update_gr(r)
+
+        for i in range(self.K):
+            self.gibbs_update_sigmai(i)
+
+        for i in range(self.K):
+            try:
+                self.gibbs_update_phi_i(i)
+            except:
+                pass
+
+        for i in range(self.K):
+            try:
+                self.gibbs_update_gamma_i(i)
+            except:
+                pass
+
+    def gibbs_update_xi(self, i):
+        cond_mean, cond_cov = self._get_xi_conditional(i)
+        L = np.linalg.cholesky(cond_cov)
+        xi_rv = np.dot(L, np.random.normal(size=L.shape[0])) + cond_mean
+        self._X[:, i] = xi_rv
+
+    def gibbs_update_gr(self, r):
+
+        assert(r >= 1)
+
+        cond_mean, cond_cov = self._get_gr_conditional(r)
+        L = np.linalg.cholesky(cond_cov)
+        gr_rv = np.dot(L, np.random.normal(size=L.shape[0])) + cond_mean
+        self._Gs[r] = gr_rv
+
+    def gibbs_update_sigmai(self, i):
+        # Metropolis-within-gibbs update
+        def _logp(s):
+            lp = np.sum(norm.logpdf(self.data.Y[:, i],
+                                    loc=self._X[:, i],
+                                    scale=s))
+            lprior = self.sigmas[i].prior.logpdf(s)
+            return lp + lprior
+
+        sigma_i = self.sigmas[i]
+        snew = sigma_i.proposal.rvs(sigma_i.value)
+
+        A = np.exp(_logp(snew) - _logp(sigma_i.value))
+
+        # Check proposal is symmetric
+
+        if np.random.uniform() <= A:
+            sigma_i.value = snew
+
+    def gibbs_update_psi_r(self, r):
+        pass
+
+    def gibbs_update_phi_i(self, i):
+        k_i = self._x_kernels[i]
+        phi_i = k_i.kpar
+
+        tt = self.data.time
+        xi = self._X[:, i]
+        fi = self._dXdt(self._X, self._Gs)[:, i]
+
+        def _l(phi_val):
+
+            Cxx = k_i.cov(0, 0, tt, tt, kpar=phi_val)
+            Lxx = np.linalg.cholesky(Cxx)
+            Cxdx = k_i.cov(0, 1, tt, tt, kpar=phi_val)
+            Cdxdx = k_i.cov(1, 1, tt, kpar=phi_val)
+
+            Cdxdx_x = Cdxdx - np.dot(Cxdx.T, _back_sub(Lxx, Cxdx))
+            I = np.diag(np.ones(Cdxdx.shape[0]))
+            S = Cdxdx_x + self.gammas[i].value**2*I
+            S_chol = np.linalg.cholesky(S)
+
+            mi = np.dot(Cxdx.T, _back_sub(Lxx, xi))
+
+            lval = _norm_quad_form(fi-mi, S_chol)
+            lprior = phi_i.prior.logpdf(phi_val)
+            return lval + lprior
+
+        phi_i_new_val = phi_i.proposal.rvs(phi_i.value())
+
+        A = np.exp(_l(phi_i_new_val) - _l(phi_i.value()))
+        if np.random.uniform() <= A:
+            for x, p in zip(phi_i_new_val, phi_i.parameters.values()):
+                if isinstance(x, float):
+                    p.value = x
+                else:
+                    p.value = x[0]
+
+            # If we accept then the kernel parameters need to be updated
+            Cxx = k_i.cov(0, 0, tt, tt)
+            Lxx = np.linalg.cholesky(Cxx)
+            Cxdx = k_i.cov(0, 1, tt, tt)
+            Cdxdx = k_i.cov(1, 1, tt)
+
+            Cdxdx_x = Cdxdx - np.dot(Cxdx.T, _back_sub(Lxx, Cxdx))
+            I = np.diag(np.ones(Cdxdx.shape[0]))
+            S = Cdxdx_x + self.gammas[i].value**2*I
+            S_chol = np.linalg.cholesky(S)
+
+            self.Lxx[i] = Lxx
+            self.Cxdx[i] = Cxdx
+            self.S_chol[i] = S_chol
+
+    def gibbs_update_gamma_i(self, i):
+        tt = self.data.time
+
+        k_i = self._x_kernels[i]
+        Lxx = self.Lxx[i]
+        Cxdx = self.Cxdx[i]
+        Cdxdx = k_i.cov(1, 1, tt, tt)
+
+        Cdxdx_x = Cdxdx - np.dot(Cxdx.T, _back_sub(Lxx, Cxdx))
+
+        xi = self._X[:, i]
+        mi = np.dot(Cxdx.T, _back_sub(Lxx, xi))
+        fi = self._dXdt(self._X, self._Gs)[:, i]
+
+        gamma_i = self.gammas[i]
+
+        def _l(gamma_val):
+
+            S = Cdxdx_x + gamma_val**2*np.diag(np.ones(tt.size))
+            S_chol = np.linalg.cholesky(S)
+
+            lv = _norm_quad_form(fi-mi, S_chol)
+            lprior = gamma_i.logpdf(gamma_val)
+
+            return lv + lprior
+
+        gamma_i_new_val = gamma_i.proposal(gamma_i.value)
+
+        A = np.exp(_l(gamma_i_new_val) - _l(gamma_i.value))
+        if np.random.uniform() <= A:
+
+            S = Cdxdx_x + gamma_i_new_val**2*np.diag(np.ones(tt.size))
+            S_chol = np.linalg.cholesky(S)
+            self.S_chol[i] = S_chol
 
     def _init_parameters(self):
         self._init_sigmas()
@@ -189,20 +335,18 @@ class MulLatentForceModel_adapgrad:
     def _parse_component_k_for_gr(self, r, k, ret_inv=False):
         return _parse_component_k_for_gr(self, r, k, ret_inv)
 
+
 """
 Functions describing the model
 """
 
 
 def _log_eq20_k(xk, fk, mk,
-                Lxx, dCd_x, gamma_k,
+                Lxx, S_chol,
                 phi_k_val=None, phi_k_prior=None):
     exp_arg = _norm_quad_form(xk, Lxx)
 
-    S = dCd_x + gamma_k**2*np.diag(np.ones(xk.size))
-    dLd_x = np.linalg.cholesky(S)
-
-    exp_arg += _norm_quad_form(fk-mk, dLd_x)
+    exp_arg += _norm_quad_form(fk-mk, S_chol)
 
     if phi_k_prior is not None:
         exp_arg += np.log(phi_k_prior.pdf(phi_k_val))
@@ -326,7 +470,7 @@ def _store_gpdx_covs(mobj):
 
         Cdxdx_x = Cdxdx - np.dot(Cxdx.T, _back_sub(Lxx, Cxdx))
         I = np.diag(np.ones(Cdxdx_x.shape[0]))
-        S = Cdxdx_x + np.diag(mobj.gammas[k].value**2*I)
+        S = Cdxdx_x + mobj.gammas[k].value**2*I
         S_chol = np.linalg.cholesky(S)
 
         mobj.Lxx.append(Lxx)

@@ -34,6 +34,9 @@ class GammaDistribution:
         else:
             return scipy.stats.gamma.logpdf(x, a=self.a, scale=self.scale)
 
+    def rvs(self, size=1):
+        return scipy.stats.gamma.rvs(a=self.a, scale=self.scale, size=size)
+
 
 class ProposalDistribution(ProbabilityDistribution):
     def __init__(self,
@@ -176,20 +179,25 @@ class HamiltonianMonteCarlo:
         znew = zcur + eps*rhalfstep / self.momenta_scale**2
         rnew = rhalfstep - 0.5*eps*self.Egrad(znew, *args, **kwargs)
 
-        Hnew = self.H(znew, rnew)
-        A = np.exp(Hnew - Hcur)
-
-        if np.random.uniform() <= A:
-            return znew, rnew, Hnew
-
+        if np.any(znew <= 0):
+            return zcur, rcur, Hcur
         else:
-            return znew, rcur, Hcur
+
+            Hnew = self.H(znew, rnew)
+            A = np.exp(Hnew - Hcur)
+
+            if np.random.uniform() <= A:
+                return znew, rnew, Hnew
+
+            else:
+                return znew, rcur, Hcur
 
     def momenta_update(self, rcur, *args, **kwargs):
         return np.random.normal(scale=self.momenta_scale,
                                 size=rcur.size)
 
     def sample(self, zcur, n_steps=10, *args, **kwargs):
+        zcur = np.array(zcur)
         rcur = np.random.normal(size=zcur.size)
         eps = np.random.choice([-1., 1.])*self.eps
         Hcur = self.H(zcur, rcur)

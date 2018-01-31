@@ -1,10 +1,10 @@
 import numpy as np
-from gpode.bayes import Parameter
+from gpode.bayes import Parameter, HamiltonianMonteCarlo
 from gpode.kernels import SEParameterCollection, Kernel
 from scipy.stats import gamma, multivariate_normal
 import scipy.special
 from scipy.misc import derivative
-
+import matplotlib.pyplot as plt
 
 np.set_printoptions(precision=4)
 np.random.seed(11)
@@ -61,5 +61,22 @@ print(np.sum(dLdC(z, C) * C/psi.value()[0]) + psi.prior.logpdf(psi.value(), deri
 psip = psi.value()
 psip[1] += eps
 
+np.random.seed(11)
+hmc = HamiltonianMonteCarlo(lambda x: -psi.prior.logpdf(x),
+                            lambda x: -psi.prior.logpdf(x, deriv=True),
+                            0.05)
+
+X = [psi.value()]
+print("=========")
+for nt in range(1000):
+    X.append(hmc.sample(X[-1]))
+
+X = np.array(X)
+fig = plt.figure()
+ax =  fig.add_subplot(111)
+ax.plot(X[:, 0], X[:, 1], '+')
+#print(np.mean(X, axis=0))
+#print(4*0.2)
+plt.show()
 #print((ell(psip)-l)/eps)
 #print(np.sum(dLdC(z, C) * dCdpsi(psi.value()[1], psi.value()[0])))

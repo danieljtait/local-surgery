@@ -42,13 +42,13 @@ for r in range(2):
 
 # Make the obs. noise parameters
 sigmas = [Parameter("sigma_{}".format(k),
-                    prior=("gamma", (4, 0.2)),
+                    prior=("gamma", (1, 0.2)),
                     proposal=("normal rw", 0.1))
           for k in range(K)]
 
 # Make the grad. noise parameters
-gammas = [Parameter("sigma_{}".format(k),
-                    prior=("gamma", (4, 0.2)),
+gammas = [Parameter("gamma_{}".format(k),
+                    prior=("gamma", (1, 0.2)),
                     proposal=("normal rw", 0.1))
           for k in range(K)]
 
@@ -73,7 +73,6 @@ def obj_func(gr, r):
 
 r = 1
 res = minimize(obj_func, np.zeros(m.N), args=(r, ))
-
 
 for r in [1, 2]:
     mgr, cgr = m._get_gr_conditional(r)
@@ -116,5 +115,43 @@ for i in [0, 1]:
 
     ax.plot(m.data.time, xi_cm, 'o')
     ax.plot(m.data.time, m.data.Y[:, i], 's')
+
+fig3 = plt.figure()
+ax = fig3.add_subplot(111)
+X = []
+SIGMAS = []
+for nt in range(2000):
+    m.gibbs_update_step()
+    if nt % 20 == 0:
+        ax.plot(m.data.time, m._X[:, 0], 'k+')
+        X.append(m._X[:, 0].copy())
+        print(nt, m._X[:, 0])
+    SIGMAS.append([s.value for s in m.sigmas])
+ax.plot(m.data.time, m.data.Y[:, 0], 'rs')
+
+X = np.array(X)
+print(X)
+print(X.shape)
+print(X[:, 7])
+print("-----------")
+
+SIGMAS = np.array(SIGMAS)
+print(np.mean(X, axis=0))
+print(np.var(X, axis=0))
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.hist(X[:, 7], normed=True)
+print(X[:, 7])
+#fig4 = plt.figure()
+#ax = fig4.add_subplot(111)
+#ax.plot(SIGMAS)
+print(np.mean(SIGMAS, axis=0))
+
+#fig4 = plt.figure()
+#ax = fig4.add_subplot(111)
+#for nt in range(100):
+#    m.gibbs_update_step()
+#    ax.plot(m.data.time, m._Gs[1], 'k+')
+
 
 plt.show()
