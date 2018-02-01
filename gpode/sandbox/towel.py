@@ -4,18 +4,81 @@ from gpode.examples import DataLoader
 from scipy.integrate import quad
 from scipy.stats import norm, multivariate_normal
 from scipy.optimize import minimize
+from scipy.integrate import dblquad
 import matplotlib.pyplot as plt
 
 
 np.set_printoptions(precision=4)
 
-Jkernel = NestedIntegralKernel()
-
+Jkernel = NestedIntegralKernel(origin="recursive")
+print(type(Jkernel))
+Jkernel2 = NestedIntegralKernel(origin="fixed")
+print(type(Jkernel2))
+"""
 tt = np.linspace(.0, 1.5, 12)
 mathieudat = DataLoader.load("mathieu", 57, tt, [0.1, 0.1], a=1., h=.9)
 np.random.seed(4)
 
+#Jkernel.cov(0, 1, 0.5, 0.5)
+tt = np.linspace(0.1, 2., 5)
+ta = tt[:-1]
+tb = tt[1:]
 
+ss = np.linspace(0.5, 1.1, 3)
+sa = ss[:-1]
+sb = ss[1:]
+
+
+x2 = np.array([[1.0, 0.0],
+               [2.0, 1.0],
+               [3.0, 2.0]])
+
+x1 = np.array([[0.25, 0.00],
+               [0.50, 0.25],
+               [0.75, 0.50]])
+
+
+def func(i, j, x1, x2):
+    T, S = np.meshgrid(x2, x1)
+
+    Sa = S[:x1.shape[1], :]
+    Sb = S[x1.shape[1]:, :]
+
+    Tb = T[:, :x2.shape[1]]
+    Ta = T[:, x2.shape[1]:]
+
+    return Jkernel._se_int_covs["J{}J{}".format(i, j)](
+        Sb.ravel(),
+        Tb.ravel(),
+        Sa.ravel(),
+        Ta.ravel(),
+        1., 1.).reshape(Ta.shape)
+
+
+C = func(0, 1, x1.T, x2.T)
+print(C)
+"""
+
+"""
+C1 = Jkernel.cov(1, 0, sb, tb, sa=sa, ta=ta)
+print("-------")
+print(C1)
+
+
+def func(sb, tb, sa, ta):
+    _Tb, _Sb = np.meshgrid(tb, sb)
+    _Ta, _Sa = np.meshgrid(ta, sa)
+    return Jkernel._se_int_covs["J0J1"](
+        _Tb.ravel(), _Sb.ravel(),
+        _Ta.ravel(), _Sa.ravel(),
+        1, 1).reshape(_Tb.shape)
+
+
+C2 = func(sb, tb, sa, tb)
+print("------")
+print(C2)
+"""
+"""
 def integrate(dt, J1J2, x0):
 
     A = mathieudat["As"][0]
@@ -92,3 +155,4 @@ ax.plot(dt + t0, res_J1J2[:, 0])
 ax.plot(dt + t0, J1, 'o')
 
 plt.show()
+"""

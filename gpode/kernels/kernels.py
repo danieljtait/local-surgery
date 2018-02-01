@@ -42,7 +42,7 @@ class Kernel:
         self.kfunc = kfunc  # Callable giving cov{Y(x1),Y(x2)}
         self.kpar = kpar    # additional arguments to kfunc
 
-    def cov(self, x1, x2=None, kpar=None):
+    def cov(self, x1, x2=None, kpar=None, **kwargs):
         if kpar is None:
             if isinstance(self.kpar, KernelParameter):
                 kpar = self.kpar.get_value()
@@ -65,7 +65,8 @@ class Kernel:
             x2 = np.asarray(x2)
 
         T, S = np.meshgrid(x2, x1)
-        return self.kfunc(S.ravel(), T.ravel(), kpar).reshape(T.shape)
+        return self.kfunc(S.ravel(), T.ravel(), kpar,
+                          **kwargs).reshape(T.shape)
 
     @classmethod
     def SquareExponKernel(cls, kpar=None):
@@ -73,6 +74,9 @@ class Kernel:
             if kpar is None:
                 kpar = [1., 1.]
         return cls(lambda s, t, p: p[0]*np.exp(-p[1]*(s-t)**2), kpar)
+
+    def _parse_kernel_par(self, kpar):
+        return _parse_kernel_par(self, kpar)
 
 
 ##
@@ -83,7 +87,7 @@ class MultioutputKernel(Kernel):
     def __init__(self, kfunc, kpar):
         super(MultioutputKernel, self).__init__(kfunc, kpar)
 
-    def cov(self, ind1, ind2, x1, x2=None, kpar=None):
+    def cov(self, ind1, ind2, x1, x2=None, kpar=None, **kwargs):
         if kpar is None:
             if isinstance(self.kpar, KernelParameter):
                 kpar = self.kpar.get_value()
@@ -108,7 +112,7 @@ class MultioutputKernel(Kernel):
         T, S = np.meshgrid(x2, x1)
         return self.kfunc(ind1, ind2,
                           S.ravel(), T.ravel(),
-                          kpar).reshape(T.shape)
+                          kpar, **kwargs).reshape(T.shape)
 
 
 ##
@@ -157,3 +161,16 @@ class GradientMultioutputKernel(MultioutputKernel):
                 return kdxdx(t1, t2, par)
 
         return cls(k, kpar)
+
+
+# Utility methods
+
+def _parse_kernel_par(cls, kpar):
+    if kpar is None:
+        if isinstance(cls.kpar, KernelParameter):
+            kpar = cls.kpar.get_value()
+        elif isinstance(cls.kpar, ParameterCollection):
+            kpar = cls.kpar.value()
+        else:
+            kpar = cls.kpar
+    return kpar
