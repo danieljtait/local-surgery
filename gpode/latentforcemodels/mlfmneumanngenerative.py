@@ -8,8 +8,10 @@ class NestedIntegralKernel(MultioutputKernel):
     def __new__(cls, kpar=[1., 1.], t0=0., origin="fixed"):
         if origin == "recursive":
             return NestedIntegralKernelRecursive(kpar)
-        else:
+        elif origin == "fixed":
             return NestedIntegralKernelFixed(kpar)
+        else:
+            raise ValueError
 
 
 class NestedIntegralKernelFixed(MultioutputKernel):
