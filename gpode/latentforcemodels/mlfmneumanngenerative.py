@@ -3,6 +3,52 @@ from .nestedgpintegrals import ngpintegrals_sqexpcovs
 from gpode.kernels import MultioutputKernel
 
 
+class NeumannGenerativeModel:
+
+    def __init__(self, As,
+                 data_time, data_model,
+                 origin_type="fixed"):
+        self.origin_type = origin_type
+
+    def _forward_integrate(self, x0, tt, J1J2):
+        if self.origin_type == "fixed":
+            pass
+        elif self.origin_type == "recursive":
+            pass
+
+    def _set_times(self, tt, t0=None):
+        if t0 is None:
+            t0 = tt[0]
+        forward_times = tt[tt >= t0]
+        backward_times = tt[tt < t0]
+
+
+def _integrate_recursive_forward(tb_vec, ta_vec, J1J2, x0, A, B):
+    # Make sure the sequence is sorted properly
+    #  - should all potentially check that
+    #    tb[i] <= tb[i+1] && ta[i] <= ta[i+1]
+    #    but perhaps just trust the input is proper
+    # assert(all(tb_vec >= ta_vec))
+    AA = np.dot(A, A)
+    AB = np.dot(A, B)
+    BA = np.dot(B, A)
+    BB = np.dot(B, B)
+
+    X = [x0]
+    for nt, (tb, ta) in enumerate(zip(tb_vec, ta_vec)):
+
+        j1 = J1J2[nt, 0]
+        j2 = J1J2[nt, 1]
+
+        x1new = np.dot(A*(tb-ta) + B*J1J2[nt, 0], X[-1])
+        x2new = np.dot(AB*j2 + BA*((tb-ta)*j1 - j2), X[-1])
+        x3new = 0.5*np.dot(AA*(tb-ta)**2 + BB*J1J2[nt, 0]**2, X[-1])
+
+        X.append(X[-1] + x1new + x2new + x3new)
+
+    return np.array(X)
+
+
 class NestedIntegralKernel(MultioutputKernel):
 
     def __new__(cls, kpar=[1., 1.], t0=0., origin="fixed"):

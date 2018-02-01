@@ -1,5 +1,6 @@
 import numpy as np
-from gpode.latentforcemodels import NestedIntegralKernel
+from gpode.latentforcemodels import (NestedIntegralKernel,
+                                     NeumannGenerativeModel)
 from gpode.examples import DataLoader
 from scipy.integrate import quad
 from scipy.stats import norm, multivariate_normal
@@ -12,11 +13,32 @@ np.set_printoptions(precision=4)
 
 Jkernel = NestedIntegralKernel(origin="recursive")
 
-tt = np.linspace(.0, 5., 12)
+tt = np.linspace(.0, 5., 8)
 mathieudat = DataLoader.load("mathieu", 57, tt, [0.1, 0.1], a=1., h=.9)
 np.random.seed(4)
 
 
+Y = mathieudat["Y"]
+
+
+def func(i, t, Y):
+    t0 = t[i]
+#    Y0 = Y[i, ]
+
+    _forward_times = t[t >= t0]
+    _forward_data = Y[t >= t0, :]
+
+    _backward_time = t[t < t0]
+    _backward_data = Y[t < t0]
+
+    print(_forward_times)
+    print(_forward_data)
+
+
+func(4, tt, Y)
+mobj = NeumannGenerativeModel
+
+"""
 def integrate_recursive_forward(tb_vec, ta_vec, J1J2, x0):
     assert(all(tb_vec >= ta_vec))
     A = mathieudat["As"][0]
@@ -54,12 +76,35 @@ J1J2 = np.array(J1J2)
 
 sol = integrate_recursive_forward(ttb, tta, J1J2, mathieudat["X"][0, ])
 
-print(np.linalg.eig(Jkernel.cov(2, 2, ttb, tta))[0])
+tpred = np.linspace(tt[0], tt[-1], 25)
+C01 = Jkernel.cov(0, 1, tpred, np.zeros(tpred.size),
+                  tb=ttb, ta=tta)
+C02 = Jkernel.cov(0, 2, tpred, np.zeros(tpred.size),
+                  tb=ttb, ta=tta)
 
-plt.plot(tt, sol)
-plt.plot(tt, mathieudat["X"], 's')
+C11 = Jkernel.cov(1, 1, ttb, tta)
+C12 = Jkernel.cov(1, 2, ttb, tta)
+C22 = Jkernel.cov(2, 2, ttb, tta)
+
+Cab = np.column_stack((C01, C02))
+Cbb = np.row_stack((np.column_stack((C11, C12)),
+                    np.column_stack((C12.T, C22))))
+
+a = np.concatenate((J1J2[:, 0], J1J2[:, 1]))
+assert(all(a == J1J2.T.ravel()))
+
+L = np.linalg.cholesky(Cbb)
+print(L.shape)
+pred = np.linalg.solve(L.T, np.linalg.solve(L, a))
+pred = np.dot(Cab, pred)
+
+plt.plot(tpred, pred, '+')
+plt.plot(tpred, 2*0.9**2*np.cos(2*tpred), 'k-', alpha=0.2)
+
+#plt.plot(tt, sol)
+#plt.plot(tt, mathieudat["X"], 's')
 plt.show()
-
+"""
 """
 def integrate(dt, J1J2, x0):
 
