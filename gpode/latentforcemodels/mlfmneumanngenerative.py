@@ -54,6 +54,8 @@ class NestedIntegralKernelRecursive(MultioutputKernel):
                                          sa, ta,
                                          kpar[0], kpar[1])
 
+        super(NestedIntegralKernelRecursive, self).__init__(_kfunc, kpar)
+
     # cov needs to be overridden compared to the usual MultioutputKernel
     # to handle the initial conditions
     def cov(self, ind1, ind2, sb, sa, tb=None, ta=None, kpar=None):

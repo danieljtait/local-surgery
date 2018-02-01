@@ -11,73 +11,55 @@ import matplotlib.pyplot as plt
 np.set_printoptions(precision=4)
 
 Jkernel = NestedIntegralKernel(origin="recursive")
-print(type(Jkernel))
-Jkernel2 = NestedIntegralKernel(origin="fixed")
-print(type(Jkernel2))
-"""
-tt = np.linspace(.0, 1.5, 12)
+
+tt = np.linspace(.0, 5., 12)
 mathieudat = DataLoader.load("mathieu", 57, tt, [0.1, 0.1], a=1., h=.9)
 np.random.seed(4)
 
-#Jkernel.cov(0, 1, 0.5, 0.5)
-tt = np.linspace(0.1, 2., 5)
-ta = tt[:-1]
-tb = tt[1:]
 
-ss = np.linspace(0.5, 1.1, 3)
-sa = ss[:-1]
-sb = ss[1:]
+def integrate_recursive_forward(tb_vec, ta_vec, J1J2, x0):
+    assert(all(tb_vec >= ta_vec))
+    A = mathieudat["As"][0]
+    B = mathieudat["As"][1]
+    AA = np.dot(A, A)
+    AB = np.dot(A, B)
+    BA = np.dot(B, A)
+    BB = np.dot(B, B)
 
+    X = [x0]
+    for nt, (tb, ta) in enumerate(zip(tb_vec, ta_vec)):
 
-x2 = np.array([[1.0, 0.0],
-               [2.0, 1.0],
-               [3.0, 2.0]])
+        j1 = J1J2[nt, 0]
+        j2 = J1J2[nt, 1]
 
-x1 = np.array([[0.25, 0.00],
-               [0.50, 0.25],
-               [0.75, 0.50]])
+        x1new = np.dot(A*(tb-ta) + B*J1J2[nt, 0], X[-1])
+        x2new = np.dot(AB*j2 + BA*((tb-ta)*j1 - j2), X[-1])
+        x3new = 0.5*np.dot(AA*(tb-ta)**2 + BB*J1J2[nt, 0]**2, X[-1])
 
+        X.append(X[-1] + x1new + x2new + x3new)
 
-def func(i, j, x1, x2):
-    T, S = np.meshgrid(x2, x1)
-
-    Sa = S[:x1.shape[1], :]
-    Sb = S[x1.shape[1]:, :]
-
-    Tb = T[:, :x2.shape[1]]
-    Ta = T[:, x2.shape[1]:]
-
-    return Jkernel._se_int_covs["J{}J{}".format(i, j)](
-        Sb.ravel(),
-        Tb.ravel(),
-        Sa.ravel(),
-        Ta.ravel(),
-        1., 1.).reshape(Ta.shape)
+    return np.array(X)
 
 
-C = func(0, 1, x1.T, x2.T)
-print(C)
-"""
+tta = tt[:-1]
+ttb = tt[1:]
 
-"""
-C1 = Jkernel.cov(1, 0, sb, tb, sa=sa, ta=ta)
-print("-------")
-print(C1)
+J1J2 = []
+for tb, ta in zip(ttb, tta):
+    j1 = quad(lambda t: 2*0.9**2*np.cos(2*t), ta, tb)[0]
+    j2 = quad(lambda t: quad(lambda s: 2*0.9**2*np.cos(2*s), ta, t)[0],
+              ta, tb)[0]
+    J1J2.append([j1, j2])
+J1J2 = np.array(J1J2)
 
+sol = integrate_recursive_forward(ttb, tta, J1J2, mathieudat["X"][0, ])
 
-def func(sb, tb, sa, ta):
-    _Tb, _Sb = np.meshgrid(tb, sb)
-    _Ta, _Sa = np.meshgrid(ta, sa)
-    return Jkernel._se_int_covs["J0J1"](
-        _Tb.ravel(), _Sb.ravel(),
-        _Ta.ravel(), _Sa.ravel(),
-        1, 1).reshape(_Tb.shape)
+print(np.linalg.eig(Jkernel.cov(2, 2, ttb, tta))[0])
 
+plt.plot(tt, sol)
+plt.plot(tt, mathieudat["X"], 's')
+plt.show()
 
-C2 = func(sb, tb, sa, tb)
-print("------")
-print(C2)
-"""
 """
 def integrate(dt, J1J2, x0):
 
