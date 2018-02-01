@@ -267,17 +267,21 @@ class MulLatentForceModel_adapgrad:
         def _l(gamma_val):
 
             S = Cdxdx_x + gamma_val**2*np.diag(np.ones(tt.size))
-            S_chol = np.linalg.cholesky(S)
+            try:
+                S_chol = np.linalg.cholesky(S)
+            except:
+                S += np.diag(1e-5*np.ones(tt.size))
 
             lv = _norm_quad_form(fi-mi, S_chol)
-            lprior = gamma_i.logpdf(gamma_val)
+            lprior = gamma_i.prior.logpdf(gamma_val)
 
             return lv + lprior
 
-        gamma_i_new_val = gamma_i.proposal(gamma_i.value)
+        gamma_i_new_val = gamma_i.proposal.rvs(gamma_i.value)
 
         A = np.exp(_l(gamma_i_new_val) - _l(gamma_i.value))
         if np.random.uniform() <= A:
+            gamma_i.value = gamma_i_new_val
 
             S = Cdxdx_x + gamma_i_new_val**2*np.diag(np.ones(tt.size))
             S_chol = np.linalg.cholesky(S)

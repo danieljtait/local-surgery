@@ -74,7 +74,7 @@ def mathieu_data(seed,
     def dXdt(X, t):
         return np.dot(A0 + A1*g1(t), X)
 
-    x0 = [0., 1.]
+    x0 = [1., 0.]
 
     X = [x0]
 
