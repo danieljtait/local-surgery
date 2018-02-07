@@ -296,6 +296,9 @@ class MulLatentForceModel_adapgrad:
         # Attach the gradient cov matrices
         _store_gpdx_covs(self)
 
+    def _store_gpdx_covs(self):
+        _store_gpdx_covs(self)
+
     def _init_sigmas(self, strategy="prior"):
         for s in self.sigmas:
             s.value = s.prior.rvs()

@@ -3,12 +3,19 @@ from .nestedgpintegrals import ngpintegrals_sqexpcovs
 from gpode.kernels import MultioutputKernel
 
 
+class Data:
+    def __init__(self, time, Y):
+        self.time = time
+        self.Y = Y
+
+
 class NeumannGenerativeModel:
 
     def __init__(self, As,
-                 data_time, data_model,
+                 data_time, data_Y,
                  origin_type="fixed"):
         self.origin_type = origin_type
+        self.data = Data(data_time, data_Y)
 
     def _forward_integrate(self, x0, tt, J1J2):
         if self.origin_type == "fixed":
@@ -16,11 +23,21 @@ class NeumannGenerativeModel:
         elif self.origin_type == "recursive":
             pass
 
-    def _set_times(self, tt, t0=None):
-        if t0 is None:
-            t0 = tt[0]
-        forward_times = tt[tt >= t0]
-        backward_times = tt[tt < t0]
+    def _set_times(self, t0_ind=None):
+        if t0_ind is None:
+            t0_ind = 0
+
+        self._t0_ind = t0_ind
+
+        tt = self.data.time
+        Y = self.data.Y
+
+        self._t0 = tt[self._t0_ind]
+
+        forward_times = tt[tt >= self._t0]
+        backward_times = tt[tt < self._t0]
+        print(backward_times)
+        print(forward_times)
 
 
 def _integrate_recursive_forward(tb_vec, ta_vec, J1J2, x0, A, B):
