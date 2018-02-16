@@ -1,0 +1,2 @@
+import numpy as np
+from deleteme_src2 import MyObj

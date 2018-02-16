@@ -1,0 +1,56 @@
+import numpy as np
+from gpode import latentforcemodels as lfm
+from gpode.examples import DataLoader
+import matplotlib.pyplot as plt
+from gpode.bayes import Parameter, ParameterCollection
+from scipy.optimize import minimize
+from scipy.stats import multivariate_normal
+
+np.set_printoptions(precision=4)
+
+MLFM = lfm.MulLatentForceModel_adapgrad
+
+tt = np.linspace(.0, 5., 12)
+mathieudat = DataLoader.load("mathieu", 57, tt, [0.1, 0.1], a=1., h=.9)
+np.random.seed(3)
+
+K = 2
+xkp = []
+for k in range(K):
+    p1 = Parameter("phi_{}_1".format(k),
+                   prior=("gamma", (4, 0.2)),
+                   proposal=("normal rw", 0.1))
+    p2 = Parameter("phi_{}_2".format(k),
+                   prior=("gamma", (4, 0.2)),
+                   proposal=("normal rw", 0.1))
+    phi_k = ParameterCollection([p1, p2], independent=True)
+    xkp.append(phi_k)
+
+
+gkp = []
+for r in range(1):
+    p1 = Parameter("psi_{}_1".format(r+1),
+                   prior=("gamma", (4, 4.)),
+                   proposal=("normal rw", 0.1))
+    p2 = Parameter("psi_{}_2".format(r+1),
+                   prior=("gamma", (4, 4.)),
+                   proposal=("normal rw", 0.1))
+    psi_r = ParameterCollection([p1, p2], independent=True)
+    gkp.append(psi_r)
+
+
+# Make the obs. noise parameters
+sigmas = [Parameter("sigma_{}".format(k),
+                    prior=("gamma", (1, .05)),
+                    proposal=("normal rw", 0.1))
+          for k in range(K)]
+
+# Make the grad. noise parameters
+gammas = [Parameter("gamma_{}".format(k),
+                    prior=("gamma", (1, 0.05)),
+                    proposal=("normal rw", 0.1))
+          for k in range(K)]
+
+m._Gs = [np.ones(mathieudat["time"].size)] + mathieudat["Gs"]
+X = m.data.Y.copy()
+m._X = X

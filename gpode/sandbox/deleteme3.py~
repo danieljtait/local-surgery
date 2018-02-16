@@ -1,0 +1,14 @@
+import numpy as np
+
+#####
+#
+# if X ~ N(mean, cov) and X = Az + b then we
+# rearrange for the mean and covariance of z
+#
+# (possibly degenerate)
+def mvt_linear_trans(A, b, mean, cov=None, inv_cov=None):
+    if inv_cov is None:
+        inv_cov = np.linalg.inv(cov)
+        
+    z_inv_cov = np.dot(A.T, np.dot(inv_cov, A))
+    

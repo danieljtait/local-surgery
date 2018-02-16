@@ -1,0 +1,9 @@
+import numpy as np
+from scipy.integrate import quad
+
+
+ts = np.linspace(0., 2., 5)
+
+ta = ts[:-1]
+tb = ts[1:]
+

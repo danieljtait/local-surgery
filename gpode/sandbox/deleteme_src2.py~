@@ -1,0 +1,19 @@
+import numpy as np
+
+
+class MyObj: 
+    def _init__(self,
+                t0, x0
+                forward_times, forward_data,
+                backward_times, backward_data,
+                step_size):
+
+        self.t0 = t0
+        self.x0 = x0
+
+
+        
+        self.forward_times = forward_times
+        for ta, tb in zip(forward_times[:-1], forward_times[1:]):
+            _ts = np.arange(ta, tb, step_size)
+        

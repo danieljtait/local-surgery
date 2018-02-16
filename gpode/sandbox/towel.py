@@ -1,42 +1,89 @@
 import numpy as np
 from gpode.latentforcemodels import (NestedIntegralKernel,
-                                     NeumannGenerativeModel)
+                                     NeumannGenerativeModel,
+                                     VariationalMLFM)
 from gpode.examples import DataLoader
 from scipy.integrate import quad
 from scipy.stats import norm, multivariate_normal
 from scipy.optimize import minimize
 from scipy.integrate import dblquad
 import matplotlib.pyplot as plt
+from scipy.special import mathieu_cem
 
 
-np.set_printoptions(precision=4)
+np.set_printoptions(precision=2)
 
 Jkernel = NestedIntegralKernel(origin="recursive")
 
-tt = np.linspace(.0, 5., 8)
-mathieudat = DataLoader.load("mathieu", 57, tt, [0.1, 0.1], a=1., h=.9)
+tt = np.linspace(.0, 1.5, 5)
+mathieudat = DataLoader.load("mathieu", 40, tt, [0.0001, 0.0001], a=1., h=1.)
 np.random.seed(4)
-
 
 Y = mathieudat["Y"]
 
+xkp = [np.array([1., 5.5]),
+       np.array([1., 5.5])]
 
-def func(i, t, Y):
-    t0 = t[i]
-#    Y0 = Y[i, ]
+gkp = [np.array([1., 3.])]
 
-    _forward_times = t[t >= t0]
-    _forward_data = Y[t >= t0, :]
-
-    _backward_time = t[t < t0]
-    _backward_data = Y[t < t0]
-
-    print(_forward_times)
-    print(_forward_data)
+vobj = VariationalMLFM(g_kernel_pars=gkp,
+                       x_kernel_pars=xkp,
+                       sigmas=np.array([0.01, 0.01]),
+                       gammas=np.array([0.1, 0.1]),
+                       As=mathieudat["As"],
+                       data_time=tt,
+                       data_Y=Y)
+vobj._store_gpdx_covs()
 
 
-func(4, tt, Y)
-mobj = NeumannGenerativeModel
+C00 = vobj._x_kernels[0].cov(0, 0, tt)
+C01 = vobj._x_kernels[0].cov(0, 1, tt)
+C11 = vobj._x_kernels[0].cov(1, 1, tt)
+
+Sxx = np.row_stack((np.column_stack((C00, C01)),
+                    np.column_stack((C01.T, C11))))
+mxx = np.ravel(Y.T)
+
+Sgg = C00.copy()
+mgg = np.random.normal(size=tt.size)
+
+mg, cg_i = vobj._parse_component_k_for_g(1, mxx, Sxx)
+
+mx, cx_i = vobj._parse_component_k_for_x(1, mg, np.linalg.inv(cg_i))
+#
+mg, Sg = vobj._get_g_conditional(mx, np.linalg.inv(cx_i))
+mx, Sx = vobj._get_x_conditional(mg, Sg)
+#vobj.func(1, mg, Sg)
+
+
+fig0 = plt.figure()
+ax = fig0.add_subplot(111)
+tt_dense = np.linspace(tt[0], tt[-1], 100)
+ax.plot(tt_dense, 2*np.cos(2*tt_dense), 'k-')
+for nt in range(5):
+    print(nt)
+    mg, Sg = vobj._get_g_conditional(mx, Sx)
+    mx, Sx = vobj._get_x_conditional(mg, Sg)
+    ax.plot(tt, mg, 'k-+', alpha=(0.1*(nt+1)/15))
+    print(mx.reshape(2, tt.size)[0, ])
+#ax.plot(tt, mathieudat["Gs"][0], 's-')
+#mobj = NeumannGenerativeModel(mathieudat["As"], tt, Y)
+#mobj._set_times()
+print(Sg)
+sd = np.sqrt(np.diag(Sg))
+ax.fill_between(tt, mg + 2*sd, mg-2*sd, alpha=0.2)
+
+
+
+#print(mathieu_cem(1, 1., 0.))
+fig = plt.figure()
+ax = fig.add_subplot(111)
+#ax.plot(tt, mathieu_cem(1, 1., tt), '-.')
+ax.plot(tt, mathieudat["Y"], 's')
+ax.plot(tt, mx.reshape(2, tt.size)[0, ], '+-')
+ax.plot(tt, mx.reshape(2, tt.size)[1, ], '+-')
+ax.plot(tt, mathieudat["X"], 'ko')
+plt.show()
 
 """
 def integrate_recursive_forward(tb_vec, ta_vec, J1J2, x0):

@@ -12,7 +12,7 @@ MLFM = lfm.MulLatentForceModel_adapgrad
 
 tt = np.linspace(.0, 5., 12)
 mathieudat = DataLoader.load("mathieu", 57, tt, [0.1, 0.1], a=1., h=.9)
-np.random.seed(4)
+np.random.seed(3)
 
 K = 2
 xkp = []
@@ -41,7 +41,7 @@ for r in range(1):
 
 # Make the obs. noise parameters
 sigmas = [Parameter("sigma_{}".format(k),
-                    prior=("gamma", (1, .1)),
+                    prior=("gamma", (1, .05)),
                     proposal=("normal rw", 0.1))
           for k in range(K)]
 
@@ -124,5 +124,6 @@ ax.plot(mathieudat["time"], mathieudat["Gs"][0], 's')
 for i, g in enumerate(G1s):
     if i % 2 == 0:
         ax.plot(m.data.time, g, 'k+', alpha=0.2)
+ax.set_ylim((-5., 5.))
 
 plt.show()

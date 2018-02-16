@@ -1,0 +1,168 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.linalg
+from scipy.integrate import quad, odeint
+from deleteme_src2 import MyObj
+
+def g1(t):
+    return np.exp(-(t-2)**2)
+
+def g2(t):
+    return np.cos(t)
+
+A0 = np.array([[0., 0.],
+               [0.,-0.1]])
+A1 = np.array([[1., 0.],
+               [0., 0.]])
+A2 = np.array([[0., 1.],
+               [-1., 0.]])
+
+x0 = np.array([1., 0.])
+tt = np.linspace(0., 4.)
+
+sol = odeint(lambda x, t: np.dot(A0 + A1*g1(t) + A2*g2(t), x),
+             x0,
+             tt)
+
+nr = 9
+redInd = np.linspace(0, tt.size-1, nr, dtype=np.intp)
+rtt = tt[redInd]
+Y = sol[redInd, ]
+
+pre_t = rtt[:nr//2 + 1]
+post_t = rtt[nr//2:]
+
+obj = MyObj(Y[nr//2, ],
+            pre_t, Y[:nr//2+1, ],
+            post_t, Y[nr//2:, ],
+            .15, np.array([A0, A1, A2]))
+
+b_psis = []
+for ta, tb in zip(obj.backward_full_ts[:-1],
+                  obj.backward_full_ts[1:]):
+    J1 = quad(g1, ta, tb)[0]
+    J2 = quad(g2, ta, tb)[0]
+    b_psis.append([J1, J2])
+b_psis = np.array(b_psis)
+
+f_psis = []
+for ta, tb in zip(obj.forward_full_ts[:-1],
+                  obj.forward_full_ts[1:]):
+    J1 = quad(g1, ta, tb)[0]
+    J2 = quad(g2, ta, tb)[0]
+    f_psis.append([J1, J2])
+f_psis = np.array(f_psis)
+
+
+pre_t, pre_x = obj._integrate(Y[nr//2, ], b_psis, "backward")
+post_t, post_x = obj._integrate(Y[nr//2, ], f_psis)
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.plot(pre_t, pre_x, '+')
+ax.plot(post_t, post_x, '+')
+ax.plot(tt, sol, 'k-', alpha=0.2)
+ax.plot(rtt, Y, 's')
+ax.plot(pre_t, obj._b_Ex, 'k-')
+ax.plot(post_t, obj._f_Ex, 'k-')
+
+fig2 = plt.figure()
+ax2 = fig2.add_subplot(111)
+
+nt_max = 20
+obj._exp_inv_scale_sq = np.array([10., 10.])
+obj._inv_Exp_gp_scale_sq = [1., 1.]
+for nt in range(nt_max):
+
+    Dinv = np.diag(obj._exp_inv_scale_sq)
+    
+    for i in range(obj._N_f_psi):
+        
+        obj._update_psi_i(i, Dinv, "forward")
+
+#    for i in range(obj._N_b_psi):
+#        obj._update_psi_i(i, np.diag(100*np.ones(2)), "backward")
+        
+    a = (nt+1)*0.1/nt_max
+        
+    ax.plot(pre_t, obj._b_Ex, 'r+-', alpha=a)
+    ax.plot(post_t, obj._f_Ex, 'r+-', alpha=a)
+
+    psi_m = np.array([m for m, c in obj.forward_psi_moments])
+
+    ax2.plot(obj.forward_full_ts,
+             np.concatenate(([0.], np.cumsum(psi_m[:, 0]))), 'k-', alpha=a)
+    ax2.plot(obj.forward_full_ts,
+             np.concatenate(([0.], np.cumsum(psi_m[:, 1]))), 'k-', alpha=a)    
+
+    obj._update_noise_pars()
+    obj._update_gp_scale_pars()
+    print("----")
+#    print(1./obj._exp_inv_scale_sq)
+    print(1./obj._inv_Exp_gp_scale_sq)
+    print(obj._f_Ex[-1])
+
+psi_vars = np.array([np.diag(c) for m, c in obj.forward_psi_moments])
+
+J1 = [0.] + [quad(g1, obj._t0, t)[0] for t in obj.forward_full_ts[1:]]
+J2 = [0.] + [quad(g2, obj._t0, t)[0] for t in obj.forward_full_ts[1:]]
+
+ax2.plot(obj.forward_full_ts, J1, '+')
+ax2.plot(obj.forward_full_ts, J2, '+')
+
+mpsi = np.array([m for m, c in obj.forward_psi_moments])
+
+
+t, X = obj._integrate(obj.x0, mpsi)
+ax.plot(t, X, 'g+-')
+
+print('')
+
+#for ex, exxt in zip(obj._f_Ex, obj._f_Exxt):
+#    print(exxt - np.outer(ex,ex))
+
+#print("Psi sds")
+#for _, c in obj.forward_psi_moments:
+#    var = np.diag(c)
+#    print(np.sqrt(var))
+
+print("Hello, world!")
+obj._update_noise_pars()
+
+#ax.fill_between(pre_t,
+#                X[:, 0] + 2*sd[:, 0],
+#                X[:, 0] - 2*sd[:, 0])
+                
+
+
+"""
+i = 0
+print(obj.forward_data_inds)
+n = obj.forward_data_inds[-1]
+yn = obj.forward_data[obj._f_y_ind_map[n], ]
+
+Dinv = np.diag(100*np.ones(2))
+EPn = obj._Exp_Pin(i, n, "forward")
+Exi = obj._f_Ex[0]
+EX = scipy.linalg.block_diag(*(Exi[None, :] for k in range(obj._K)))
+ExixiT = obj._f_Exxt[i]
+
+Exp_B = np.dot(Dinv, np.dot(EPn, EX))
+
+Exp_PinT_D_Pin = obj._Exp_Pin_mat_quad(i, n, Dinv, "forward")
+
+Si_inv_cov = np.row_stack((
+    np.column_stack((ExixiT*Mij for Mij in row))
+    for row in Exp_PinT_D_Pin[:, ]))
+
+print(yn)
+print(np.dot(yn, Exp_B))
+print(Si_inv_cov)
+print(np.linalg.inv(Si_inv_cov))
+print(np.linalg.pinv(Si_inv_cov))
+"""
+
+plt.show()
+    
+
+
