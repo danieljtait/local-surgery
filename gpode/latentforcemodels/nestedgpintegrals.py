@@ -41,7 +41,6 @@ def lambda_from_sympystr(str_expr, symb_names, print_it=False):
 
     fun_args = tuple(item for item in
                      itertools.chain(symb_map.values(), remaining_names))
-
     lfunc = sympy.lambdify(fun_args,
                            sympy_expr,
                            modules=["numpy",

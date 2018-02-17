@@ -74,13 +74,14 @@ def mathieu_data(seed,
     def dXdt(X, t):
         return np.dot(A0 + A1*g1(t), X)
 
-    x0 = [1., 0.]
+    x0 = np.array([1., -1.])
 
     X = [x0]
 
     for ta, tb in zip(times[:-1], times[1:]):
         sol = odeint(dXdt, X[-1], np.linspace(ta, tb, 25))
         X.append(sol[-1])
+
     X = np.array(X)
     Y = X.copy()
 

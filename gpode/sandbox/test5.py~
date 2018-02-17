@@ -1,0 +1,41 @@
+import numpy as np
+from scipy.special import erf
+##
+# Constants
+rootPi = np.sqrt(np.pi)
+
+###########
+#                               
+# ∫erf(z)dz = z erf(z) + exp(-z**2)/sqrt(π)
+def integral_erf(lower, upper):
+    zu = upper*erf(upper) + np.exp(-upper**2)/rootPi
+    zl = lower*erf(lower) + np.exp(-lower**2)/rootPi
+    return zu-zl
+
+##
+# /  /
+# |  |
+# |  | theta0*exp(-theta1**2*(s-t) ds dt
+# /  /
+#
+def func(sb, tb, sa, ta, theta0, theta1):
+    I1 = -integral_erf(theta1*(sb-ta), theta1*(sb-tb))
+    I2 = -integral_erf(theta1*(sa-ta), theta1*(sa-tb))
+    C = theta0*0.5*rootPi/(theta1**2)
+
+    return theta0*C*(I1 - I2)
+
+###
+# /tb
+# |
+# | theta0*exp(-theta1**2*(sb-t)**2)dt
+# /ta
+#
+def single_int(sb, tb, sa, ta, theta0, theta1):
+    I1 = erf(theta1*(tb-sb))
+    I2 = erf(theta1*(ta-sb))
+    return 0.5*theta0*rootPi*(I1 - I2)/theta1
+
+
+_cov_funcs = {"J0J1": single_int,
+             "J1J1": func}
