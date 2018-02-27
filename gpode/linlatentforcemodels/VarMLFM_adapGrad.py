@@ -25,9 +25,12 @@ class VarMLFM_adapGrad:
         self._R = self.A.shape[0] - 1       # R is the number of latent forces
                                             # there is an additional constant matrix
                                             # A[0]
-
         self._K = self.A.shape[1]           # Observation dimension
-        self._N = data_times.size           # Number of observations
+
+        if mdata:                           # Number of observations
+            self._N = self.full_times.size
+        else:
+            self._N = data_times.size       
         
         assert(self._K == self.A.shape[2])  # Squareness check
 
