@@ -1,4 +1,5 @@
 import numpy as np
+import linalg_util
 from gpode.kernels import GradientMultioutputKernel
 
 
@@ -58,6 +59,43 @@ class VarMLFM_adapGrad:
         #   fit
         self.missing_data = mdata
         _store_gpdx_covs(self, mdata)
+        _In = np.diag(np.ones(self._N))
+
+        self._X_prior_inv_covs = []
+        self._dX_prior_inv_covs = []
+
+        for Ldxdx, Lxx in zip(self.S_chol, self.Lxx):
+
+            self._X_prior_inv_covs.append(
+                linalg_util._back_sub(Lxx, _In))
+
+            self._dX_prior_inv_covs.append(
+                linalg_util._back_sub(Ldxdx, _In))
+
+        ##################
+        # Cond mean of the gradient expert corresponds to
+        #           
+        #     E[dx | x] = Cdxx Cxx^{-1} x
+        #
+        self._dX_cond_mean_transform = []
+        for Cxdx, Cinv in zip(self.Cxdx, self._X_prior_inv_covs):
+            self._dX_cond_mean_transform.append(
+                np.dot(Cxdx.T, Cinv)
+                )
+
+        self._G_prior_inv_covs = []
+        for r in range(self._R):
+            cov = np.array([[np.exp(-(s-t)**2) for t in data_times]
+                            for s in data_times])
+            self._G_prior_inv_covs.append(np.linalg.inv(cov))
+
+        self._init_X_var_dist()
+        self._init_G_var_dist()
+
+        def _init_X_var_dist(self):
+            print("This worked...")
+        def _init_G_var_dist(self):
+            print("And so did this!")
 
 
 class VarMLFM_adapGrad_missing_data:
