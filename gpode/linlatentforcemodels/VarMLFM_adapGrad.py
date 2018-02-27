@@ -10,7 +10,8 @@ class VarMLFM_adapGrad:
                  data_Y,
                  sigmas,
                  gammas,
-                 x_gp_pars):
+                 x_gp_pars
+                 mdata=False):
 
         _x_kernel_type = "sqexp"
 
@@ -51,19 +52,42 @@ class VarMLFM_adapGrad:
         # Attach the gradient kernel covariance objects to the class
         # - the characteristic length scale parameters (those not possessing
         #   tractable marginals, will typically not be changed during a call to
-        #   fit 
-        _store_gpdx_covs(self)
+        #   fit
+        self.missing_data = mdata
+        _store_gpdx_covs(self, mdata)
+
+
+class VarMLFM_adapGrad_missing_data:
+    def __init__(self,
+                 ModelMatrices,
+                 full_times,
+                 data_inds,
+                 data_Y,
+                 sigmas,
+                 gammas,
+                 x_gp_pars):
+
+        assert(data_Y.shape[0] == len(data_inds))
+        
+        self.full_times = full_times
+        super(VarMLFM_adapGrad_missing_data, self).__init__(ModelMatrices,
+                                                            full_times[data_inds],
+                                                            data_Y,
+                                                            sigmas,
+                                                            gammas,
+                                                            x_gp_pars,
+                                                            mdata=True)
 
 
 """
 Model Setup Utility Functions
 """
-def _store_gpdx_covs(mobj, missing_data=False):
+def _store_gpdx_covs(mobj):
     mobj.Lxx = []
     mobj.Cxdx = []
     mobj.S_chol = []
 
-    if missing_data:
+    if mobj.missing_data:
         tt = mobj.full_times
     else:
         tt = mobj.data_time
