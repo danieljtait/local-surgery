@@ -1,0 +1,30 @@
+
+
+
+class VarMLFM_adapGrad:
+
+    def __init__(self,
+                 ModelMatrices,
+                 data_times,
+                 data_Y,
+                 sigmas,
+                 gammas,
+                 x_gp_pars):
+
+        _x_kernel_type = "sqexp"
+
+        # Attach the data
+        self.data_times = data_times
+        self.data_Y = data_Y
+
+        # Model matrices
+        self.A = np.asarray(ModelMatrices)
+
+        self._R = self.A.shape[0] - 1       # R is the number of latent forces
+                                            # there is an additional constant matrix
+                                            # A[0]
+
+        self._K = self.A.shape[1]           # Observation dimension
+        self._N = data_times.size           # Number of observations
+        
+        assert(self._K == self.A.shape[2])  # Squareness check
