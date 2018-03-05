@@ -1,0 +1,13 @@
+import numpy as np
+
+### Handling of the covariance function
+
+
+def get_cov(i, ta, tb, cov_funcs):
+
+    C00 =
+
+
+def _get_cov_00(vec_ta, vec_tb, cov_funcs):
+    _Ta, _Sa = np.meshgrid(vec_ta, vec_ta)
+    _Tb, _Sb = np.meshgrid(vec_tb, vec_tb)

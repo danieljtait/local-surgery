@@ -1,0 +1,176 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import odeint, quad, dblquad
+from scipy.stats import multivariate_normal, norm
+np.set_printoptions(precision=2)
+
+m0 = 0.8
+sd0 = .3
+rho = .3
+cov = np.array([[sd0**2, rho*sd0**2],
+                [rho*sd0**2, sd0**2]])
+
+#print("Prior coefficient of variation {}".format(sd0/m0))
+Lambda = np.linalg.inv(cov)
+
+sd = 1.
+y = 1.1
+
+def _log_data(x1, x2):
+    return norm.logpdf(y, x1*x2, sd)
+
+def integrand(x, mu_x2, sd_x2):
+    ELn = -(0.5/sd**2)*(x**2*(sd_x2**2 + mu_x2**2) - 2*x*mu_x2)
+#    ELn = quad(lambda x2: _log_data(x, x2)*norm.pdf(x2, mu_x2, sd_x2),
+#               -np.inf, np.inf)[0]
+
+    return np.exp(ELn)
+
+def upost(x):
+    return norm.pdf(y, loc=x**2, scale=sd)*norm.pdf(x, m0, sd0)
+NC, err = quad(upost, -np.inf, np.inf)
+def post(x):
+    return norm.pdf(y, loc=x**2, scale=sd)*norm.pdf(x, m0, sd0)/NC
+
+def post_logpdf(x):
+    return norm.logpdf(y, loc=x**2, scale=sd) + norm.logpdf(x, m0, sd0) - np.log(NC)
+
+def Dkl(mu, sd):
+    def _integrand(x):
+        lp1 = post_logpdf(x)
+        lp2 = norm.logpdf(x, mu, sd)
+        return norm.pdf(x, mu, sd)*(lp2-lp1)
+    return quad(_integrand, -np.inf, np.inf)
+
+def obj_func(mu, logsd):
+    sd = np.exp(logsd)
+    return Dkl(mu, sd)[0]
+
+from scipy.optimize import minimize
+res = minimize(lambda x: obj_func(x[0], x[1]), [0., 0.])
+
+def update_q1(m2, sd2, Y_noise, Lambda):
+    # data contribution
+    mdata = m2/(m2**2 + sd2**2)
+    vardata = Y_noise**2/(m2**2 + sd2**2)
+
+    # prior contribution
+    mprior = m0 - (Lambda[0, 1]/Lambda[1, 1])*(m2 - m0)
+    varprior = 1./Lambda[1, 1]
+
+    var = (vardata*varprior)/(vardata + varprior)
+    mean = var*(mdata/vardata + mprior/varprior)
+    return mean, np.sqrt(var)
+
+def var_opt(rho, sd):
+    cov = np.array([[sd0**2, rho*sd0**2],
+                [rho*sd0**2, sd0**2]])
+
+    Lambda = np.linalg.inv(cov)
+    
+    m1 = 0.1
+    sd1 = 1.
+    m2 = 0.
+    sd2 = 1.
+    mcur = m1
+
+    while True:
+        m1, sd1 = update_q1(m2, sd2, sd, Lambda)
+        m2, sd2 = update_q1(m1, sd1, sd, Lambda)
+
+        delta = m1 - mcur
+        if abs(delta) < 1e-8:
+            break
+        mcur = m1
+
+    return m1, sd1
+
+def objfunc_rho(rho):
+    if abs(rho) > 1:
+        return np.inf
+    
+    m1, sd1 = var_opt(rho, sd)
+    val = Dkl(m1, sd1)[0]
+
+    return val
+
+res_rho = minimize(objfunc_rho, .0, method="Nelder-Mead")
+m1, sd1 = var_opt(res_rho.x, sd)
+
+xx = np.linspace(-1., 2., 100)
+
+mtrue = quad(lambda x: x*post(x), -np.inf, np.inf)[0]
+vartrue = quad(lambda x: (x-mtrue)**2*post(x), -np.inf, np.inf)[0]
+
+print("Rho", res_rho.x)
+print(res_rho.fun, objfunc_rho(-res_rho.x))
+
+print("True mean:",mtrue, "sd true:", np.sqrt(vartrue))
+print(m1, sd1)
+print(res.x[0], np.exp(res.x[1]))
+
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.plot(xx, norm.pdf(xx, m1, sd1), '-.')
+ax.plot(xx, post(xx), '-')
+ax.plot(xx, norm.pdf(xx, res.x[0], np.exp(res.x[1])), '+')
+
+sdY = sd
+
+    
+fig2 = plt.figure()
+ax = fig2.add_subplot(111)
+
+rhos = np.linspace(-0.9, 0.95, 25)
+pars = np.array([var_opt(r, sd) for r in rhos])
+
+ax.plot(pars[:, 0], pars[:, 1])
+ax.plot(res.x[0], np.exp(res.x[1]), '+')
+
+plt.show()
+
+    
+
+
+"""
+
+Ar0 = np.random.normal(size=4).reshape(2, 2)
+Ar1 = np.random.normal(size=4).reshape(2, 2)
+Ar2 = np.random.normal(size=4).reshape(2, 2)
+
+x = np.array([0.8, 0.3])
+t = 0.5
+
+gr0 = np.random.normal()
+gr1 = np.random.normal()
+gr2 = np.random.normal()
+
+expr = Ar0*gr0 + Ar1*gr0*gr1 + Ar2*gr0*gr1*gr2
+
+def prod(xx):
+    res = xx[0]
+    for val in xx[1:]:
+        res*=val
+    return res
+    
+
+def func(q, gg, Ar):
+    grq = gg[q]
+    grq_neg = gg[:q] + gg[q+1:]
+
+    print(gg)
+    print(grq)
+    print(grq_neg)
+
+    expr1 = sum(a*g for a, g in zip(Ar[:q], gg[:q]))
+
+
+for q in range(3):
+    print("====={}=====".format(q))
+    func(q,
+         [gr0, gr1, gr2],
+         [Ar0, Ar1, Ar2])
+
+"""
+

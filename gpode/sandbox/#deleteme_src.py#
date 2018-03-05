@@ -1,0 +1,672 @@
+import numpy as np
+from scipy.stats import norm, multivariate_normal
+from scipy.integrate import quad, odeint
+from scipy.optimize import minimize
+import matplotlib.pyplot as plt
+import scipy.linalg
+
+
+##
+# if X is a matrix random variable such that
+#
+# E[vec(X)] = vec_mean,    Cov[vec(X)] = vec_cov
+#
+# then returns the mean and variance of vec(X.T) by
+# swapping indices of the mean and columns of the cov matrix
+def get_mat_T_moments(vec_mean, vec_cov):
+    N = vec_cov.shape[0]
+    rootN = int(np.sqrt(N))
+    ind_mat = np.array(range(N)).reshape(rootN, rootN)
+    t_ind = ind_mat.T.ravel()
+
+    mean = vec_mean[t_ind]
+
+    cov = vec_cov[:, t_ind]
+    cov = cov[t_ind, :]
+
+    return mean, cov
+
+#####
+#
+# if X ~ N(mean, cov) and X = Az + b then we
+# rearrange for the mean and covariance of z
+#
+# (possibly degenerate)
+def mvt_linear_trans(A, b, mean, cov=None, inv_cov=None, return_type="inv"):
+    if inv_cov is None:
+        inv_cov = np.linalg.inv(cov)
+        
+    z_inv_cov = np.dot(A.T, np.dot(inv_cov, A))
+
+    w = np.dot(A.T, np.dot(inv_cov, mean - b))
+    z_mean = np.linalg.solve(z_inv_cov, w)
+
+    if return_type == "inv":
+        return z_mean, z_inv_cov
+    else:
+        return z_mean, np.linalg.inv(z_inv_cov)
+
+
+np.set_printoptions(precision=4)
+
+R = 2
+K = 2
+I = np.diag(np.ones(K))
+
+N
+= 3
+ss = np.random.uniform(high=2, size=N*N)
+ss = np.sort(ss)
+_T1, _T2 = np.meshgrid(ss, ss)
+mean = np.random.normal(size=ss.size)
+cov = np.exp(-0.5*(_T1.ravel()-_T2.ravel())**2).reshape(_T1.shape)
+
+A0 = np.random.normal(size=K*K).reshape(2, 2)
+A1 = np.random.normal(size=K*K).reshape(2, 2)
+A2 = np.random.normal(size=K*K).reshape(2, 2)
+A = [A0, A1, A2]
+
+dt = 0.1
+psi_i = np.array([0.4, 0.1])
+
+
+def get_S(phi):
+    dt = 0.1
+    return I + dt*A0 + phi[0]*A1 + phi[1]*A2
+
+phis = multivariate_normal.rvs(mean=mean, cov=cov, size=1000)
+
+ssT = np.zeros((K*K, K*K))
+
+for phi in phis:
+    S = get_S(phi)
+    s = S.ravel()
+    ssT += np.outer(s, s)
+
+EssT = ssT/phis.shape[0]
+
+#print(EssT)
+cov_ss = np.zeros(EssT.shape)
+for s in range(R):
+    As = A[s+1]
+    for t in range(R):
+        At = A[t+1]
+        cov_ss += cov[s, t]*np.outer(As.ravel(), At.ravel())
+Es = I + 0.1*A0 + mean[0]*A1 + mean[1]*A2
+EsEst = np.outer(Es.ravel(), Es.ravel())
+#print(EssT)
+#print(cov_ss + EsEst)
+
+###
+# E[ X M X.T ]
+#
+# cov_X is the N^2 x N^2 matrix with
+#
+# where vec(X) has covariance matrix cov_X
+def Exp_mat_quad(mean_X, cov_X, M):
+    _N = M.shape[0]
+    res = np.zeros((_N, _N))
+    for m in range(_N):
+        for n in range(_N):
+            cov_xm_xn = cov_X[m*_N:(m+1)*_N, n*_N:(n+1)*_N]
+            expr1 = np.dot(cov_xm_xn, M)
+            res[m, n] = np.trace(expr1) 
+    res += np.dot(mean_X, np.dot(M, mean_X.T))
+    return res
+
+
+##
+# returns the mean and covariance of the variables
+#
+#     S = I + A*dt + sum_r A_r * psi_i_r
+#
+# given the mean and covariance of the variational
+# parameters psi_i
+def get_vec_Si_pars(psi_i_mean, psi_i_cov, A, dt):
+
+    R = psi_i_mean.size
+    K = A[0].shape[0]
+    I = np.diag(np.ones(K))
+
+    EvecSi = sum([A[i+1].ravel()*mi
+                  for i, mi in enumerate(psi_i_mean)])
+    EvecSi += I.ravel() + dt*A[0].ravel()
+    
+    Cov_vecSi = np.zeros((K*K, K*K))
+    for s in range(R):
+        _as = A[s+1].ravel()
+        for t in range(R):
+            _at = A[t+1].ravel()
+            Cov_vecSi += psi_i_cov[s, t]*np.outer(_as, _at)
+
+    return EvecSi, Cov_vecSi
+
+
+#print(cov_vec_si + np.outer(m_vec_si, m_vec_si))
+class MyObject:
+    def __init__(self, times, step_size):
+
+        # Preprocessing of the data
+
+        assert(step_size < min(abs(np.diff(times))))
+
+        full_ts = [times[0]]
+        data_inds = [0]
+        for ta, tb in zip(times[:-1], times[1:]):
+            ts = np.arange(ta, tb, step_size)
+            if (tb - ts[-1]) >= 1e-5:
+                ts = np.concatenate((ts, [tb]))
+            full_ts = np.concatenate((full_ts, ts[1:]))
+            data_inds.append(len(full_ts)-1)
+        self.data_inds = np.array(data_inds, dtype=np.intp)
+        self.full_ts = full_ts
+        self.dts = np.diff(self.full_ts)
+
+        
+        Phis = []
+        for ta, tb in zip(full_ts[:-1], full_ts[1:]):
+            J = quad(lambda t: np.cos(t), ta, tb)[0]
+            Phis.append([tb-ta, J])
+        Phis = np.array(Phis)
+        self.Phis = Phis
+
+        self.K = 2
+        A0 = np.array([[-0.5, 0.],
+                       [0., 0.]])
+        A1 = np.array([[0.1, -1.],
+                       [1., 0.]])
+        self.A = [A0, A1]
+
+        self.R = len(self.A)-1
+
+        self.x0 = np.array([1., 0.])
+
+        # set up Si moment containers
+        self.Si_moments = [[] for i in range(self.dts.size)]
+
+        
+    def _init_psi_distributions(self):
+        self.psi_moments = []
+        for psi in self.Phis:
+            mean = np.random.normal(size=self.R, scale=0.2)
+            cov = np.diag(np.ones(self.R))
+            self.psi_moments.append([mean, cov])
+
+    def _get_ex_exxt(self):
+        Ex_list = [self.x0]
+        Exxt_list = [np.outer(self.x0, self.x0)]
+        for i, (psi_m, psi_cov) in enumerate(self.psi_moments):
+            evs, ev_cov = get_vec_Si_pars(psi_m, psi_cov,
+                                            self.A, self.dts[i])
+            eS = evs.reshape(2, 2)
+            
+            ex = np.dot(eS, Ex_list[-1])
+            Ex_list.append(ex)
+
+            exxt = Exp_mat_quad(eS, ev_cov, Exxt_list[-1])
+            Exxt_list.append(exxt)
+        self.Ex = Ex_list
+        self.ExxT = Exxt_list
+
+    def integrate(self, x0):
+        X = [x0]
+        for phi in self.Phis:
+            S = I + sum(f*a for f, a in zip(self.A, phi))
+            xnew = np.dot(S, X[-1])
+            X.append(xnew)
+        return self.full_ts, np.array(X)
+
+    ###
+    # Xn = [S_{n-1} .. S_{i+1} S_i S_{i-1} .. S_0 x_0 ]
+    #
+    # decomposes into
+    #
+    # Mpost = S_{n-1} ... S_{i+1}
+    #
+    # xpre  = S_{i-1} ... S_0 x0
+    ##
+    def _func(self, i, psi):
+
+        N = self.data_inds[1]
+        I = np.diag(np.ones(self.K))
+
+        self._get_M_post_moments(i, N)
+
+        """
+        psis = self.Phis[:N, 1]
+        dts = self.dts[:N]
+
+        _S = [I + self.A[0]*dt + self.A[1]*p
+              for dt, p in zip(dts, psis)]
+
+        xpre = self.x0.copy()
+        for j in range(i):
+            xpre = np.dot(_S[j], xpre)
+
+        print(xpre)
+        E_xpre = self.Ex[i]
+
+        print("=================")
+        nsim = 100000
+        rv_psi = np.column_stack([multivariate_normal.rvs(
+            mean=m,
+            cov=c,
+            size=nsim) for m,c in self.psi_moments[:i]])
+        print("=================")
+        rv = np.zeros(2)
+        for z in rv_psi:
+            s0 = I + self.A[0]*dts[0] + self.A[1]*z[0]
+            s1 = I + self.A[0]*dts[1] + self.A[1]*z[1]
+            _x = np.dot(s1, np.dot(s0, self.x0))
+            rv += _x
+        print(E_xpre)
+        print(rv/nsim)
+        print('-----------------')
+        """
+        """
+        S_post = np.diag(np.ones(self.K))
+        for j in range(i+1, N):
+            S_post = np.dot(_S[j], S_post)
+
+        S_i = I + self.A[0]*dts[i] + self.A[1]*psis[i]
+
+        print(np.dot(S_post, np.dot(S_i, xpre)))
+
+        xn = self.x0.copy()
+        for s in _S:
+            xn = np.dot(s, xn)
+        print(xn)
+        """
+    ###
+    # Returns the mean and covariance of the random variable
+    #
+    # Mpost = [S_{N-1}, S_{N-2}, ... , S_{i+1} ]
+    #
+    def _get_M_post_moments(self, i, N, S0 = None):
+
+        if S0 is None:
+            S0 = np.random.normal(size=4).reshape(2, 2)
+            S0 = S0 + S0.T
+
+        res = S0.copy()#np.diag([10., 10.])
+
+        psi_mean = []
+        psi_vars = []
+        
+        for ind in range(i+1, N):
+            psi_ind_moments = self.psi_moments[ind]
+
+            psi_mean.append(psi_ind_moments[0][0])
+            psi_vars.append(psi_ind_moments[1][0,0])
+            
+            vecS_mean, vecS_cov= get_vec_Si_pars(psi_ind_moments[0],
+                                                 psi_ind_moments[1],
+                                                 self.A, self.dts[ind])
+            vecST_mean, vecST_cov = get_mat_T_moments(vecS_mean, vecS_cov)
+
+            res = Exp_mat_quad(vecST_mean.reshape(self.K, self.K),
+                               vecST_cov,
+                               res)
+
+        return res
+        """
+        rv = multivariate_normal.rvs(mean=psi_mean, cov=np.diag(psi_vars),
+                                     size=500000)
+        I = np.diag(np.ones(self.K))
+        val = np.zeros((2, 2))
+        for z in rv:
+            S2 = I + self.A[0]*self.dts[2] + self.A[1]*z[0]
+            S3 = I + self.A[0]*self.dts[3] + self.A[1]*z[1]
+
+            Q = S0.copy()#np.diag([10., 10.])
+            Q = np.dot(S2.T, np.dot(Q, S2))
+            Q = np.dot(S3.T, np.dot(Q, S3))
+
+            val += Q
+
+        print(abs(res - val/rv.shape[0]))
+        """
+
+    def func2(self, i, psi_val):
+        I = np.diag(np.ones(2))
+
+        Si = I + self.A[0]*self.dts[i] + self.A[1]*psi_val
+        Dinv = np.diag([1., 2.])
+
+        n = self.data_inds[1]
+        def _integrand(psi_ni):
+            
+            xpre = self.x0
+            # construct the pre term
+            for ind in range(i):
+                s = I + self.A[0]*self.dts[ind] + self.A[1]*psi_ni[ind]
+                xpre = np.dot(s, xpre)
+
+            # constrct the post term
+            Mpost = np.diag(np.ones(2))
+            for ind in range(i+1, n):
+                s = I + self.A[0]*self.dts[ind] + self.A[1]*psi_ni[ind-1]
+                Mpost = np.dot(s, Mpost)
+
+            xn = np.dot(Mpost, np.dot(Si, xpre))
+            return np.dot(xn, np.dot(Dinv, xn))
+
+        psi_mean = []
+        psi_cov = []
+        for ind in range(n):
+            if ind != i:
+                psi_mean.append(self.psi_moments[ind][0][0])
+                psi_cov.append(self.psi_moments[ind][1][0, 0])
+        rv = multivariate_normal.rvs(mean=psi_mean,
+                                     cov=np.diag(psi_cov),
+                                     size=10000)
+        MCval = 0.
+        for z in rv:
+            MCval += _integrand(z)
+        MCval /= rv.shape[0]
+        print(MCval)
+        #### Now try and get the equivalent value analytically
+        ExxT = self.ExxT[i]
+
+        EMpost = self._get_M_post_moments(i, n, Dinv)
+        Q = np.row_stack((
+            np.column_stack((EMpost[0,0]*ExxT, EMpost[0, 1]*ExxT)),
+            np.column_stack((EMpost[1,0]*ExxT, EMpost[1, 1]*ExxT))))
+        vec_Si = Si.ravel()
+        print(np.dot(vec_Si, np.dot(Q, vec_Si)))
+
+        ### Still need to do the linear component
+
+    ## To do - store the implied moments of Si
+
+    ###
+    # For the variable
+    #
+    #     P_{i,n} = S(ψ_{n-1}) ... S(ψ_{i+1})
+    #
+    # returns E[P_{i, n}] based on the current moments of
+    # the variational parameters ψ
+    ###
+    def _Exp_Pin(self, i, n):
+        res = np.diag(np.ones(self.K))
+
+        for ind in range(i+1, n):
+            p_ind_mean, p_ind_cov = self.psi_moments[ind]
+            Sind_mean, _ = get_vec_Si_pars(p_ind_mean,
+                                           p_ind_cov,
+                                           self.A,
+                                           self.dts[ind])
+            res = np.dot(Sind_mean.reshape(self.K, self.K), res)
+
+        return res
+
+
+    ###
+    # For the variable
+    #
+    #     P_{i,n} = S(ψ_{n-1}) ... S(ψ_{i+1})
+    #
+    # returns E[P_{i, n}^T Q P_{i, n}] based on the current moments of
+    # the variational parameters ψ
+    #
+    # note the transpose in the ordering
+    ###
+    def _Exp_Pin_mat_quad(self, i, n, Q):
+        res = Q
+        for m,c in reversed(self.Si_moments[i+1:n]):
+            m, c = get_mat_T_moments(m, c)
+            res = Exp_mat_quad(m.reshape(self.K, self.K),
+                               c, res)
+        return res
+
+    def _store_Si_moments(self, i):
+        if i < 0:
+            for j in range(self.dts.size):
+                self._store_Si_moments(j) # rewrite for the function to accept an iterator
+        else:
+            psi_i_mean, psi_i_cov = self.psi_moments[i]
+            self.Si_moments[i] = get_vec_Si_pars(psi_i_mean, psi_i_cov,
+                                                 self.A, self.dts[i])
+
+    ###
+    # Now in a position to get the Yn contribution to the moment
+    # si
+    def _parse_Yn_contrib_for_Si(self, i, n, D):
+        Exp_PinT_D_Pin = self._Exp_Pin_mat_quad(i, n, D)
+        ExixiT = self.ExxT[i]
+
+        Si_inv_cov = np.row_stack((
+            np.column_stack((ExixiT*Mij for Mij in row))
+            for row in Exp_PinT_D_Pin[:, ]))
+
+        Exp_Pin = self._Exp_Pin(i, n)
+        Exi = self.Ex[i]
+        EX = scipy.linalg.block_diag(*(Exi[None, :] for k in range(self.K)))
+
+        Exp_B = np.dot(D, np.dot(Exp_Pin, EX))
+        yn = np.array([0.95,0.1])
+        y_Exp_B = np.dot(yn, Exp_B)
+
+        Si_mean = np.dot(np.linalg.pinv(Si_inv_cov), y_Exp_B)
+
+        # Convert these contributions to the values of
+        # the random components of psi, (psi_i1,...,psi_iR)
+        Avecs = np.column_stack((a.ravel() for a in self.A[1:]))
+        b = (np.diag(np.ones(2)) + self.A[0]*self.dts[i]).ravel()
+
+        psi_m, psi_inv_cov = mvt_linear_trans(Avecs, b,
+                                              Si_mean, inv_cov=Si_inv_cov)
+
+        self._update_psi_moments(i, psi_m, np.linalg.inv(psi_inv_cov))
+
+    def _update_psi_moments(self, i, psi_mean, psi_cov):
+        self.psi_moments[i] = [psi_mean, psi_cov]
+
+        # Update
+        self._get_ex_exxt()
+        self._store_Si_moments(i)
+
+times = np.array([0.0, .5])
+obj = MyObject(times, 0.1)
+obj._init_psi_distributions()
+obj._get_ex_exxt()
+    
+
+A0 = obj.A[0]
+A1 = obj.A[1]
+
+x0 = np.array([1., 0.])
+
+obj._store_Si_moments(-1)
+
+
+
+#print(obj._Exp_Pin(2, 4))
+i = 1
+D = np.diag(4*np.ones(2))
+n = obj.data_inds[1]
+
+psi_m = np.array([c[0,0] for m,c in obj.psi_moments])
+print(psi_m.ravel())
+    
+for nt in range(15):
+    print("---",nt,"---")
+    for i in range(n):
+        obj._parse_Yn_contrib_for_Si(i, n, D)
+
+    psi_m = np.array([c[0,0] for m,c in obj.psi_moments])
+    print(psi_m.ravel())
+
+for Ex, ExxT in zip(obj.Ex, obj.ExxT):
+    cov = ExxT - np.outer(Ex,Ex)
+    print(cov)
+"""
+print(obj._Exp_Pin_mat_quad(i, 4, D))
+
+print("=======")
+res = np.zeros((2,2))
+mean = [m[0] for m,c in obj.psi_moments[i+1:4]]
+var = [c[0,0] for m, c in obj.psi_moments[i+1:4]]
+rv = multivariate_normal.rvs(mean=mean, cov=np.diag(var), size=100000)
+for z in rv:
+    Pin = np.diag(np.ones(2))
+    for ind, val in enumerate(z):
+        S = np.diag(np.ones(2)) + A0*obj.dts[i+1+ind] + A1*val
+        Pin = np.dot(S, Pin)
+    res += np.dot(Pin.T, np.dot(D, Pin))
+print(res/rv.shape[0])
+"""
+    
+#print(ES3)
+
+#for i in range(4):
+#    print("----",i,"----")
+#    obj.func2(i, 1.)
+
+#means = np.array(obj.Ex)
+#print(means)
+"""
+
+#ts, sol = obj.integrate(x0)
+#tt = np.linspace(ts[0], ts[-1])
+#sol2 = odeint(lambda x, t: np.dot(A0 + A1*np.cos(t), x), x0, tt)
+#plt.plot(ts, sol, 's')
+#plt.plot(tt, sol2, 'k-', alpha=0.2)
+#plt.show()
+
+
+"""
+
+"""
+class Data:
+    def __init__(self, time, Y):
+        self.time = time
+        self.Y = Y
+
+class MyClass:
+    def __init__(self, A, data, step_size):
+        self.A = A
+
+        self.R = A.shape[0]-1
+        self.K = A.shape[1]
+
+        self._I = np.diag(np.ones(self.K))
+
+        ## Set up the discreteisation for the integrators
+        self.t_knots = []
+        for ta, tb in zip(data.time[:-1], data.time[1:]):
+            ts = np.arange(ta, tb, step_size)
+            if (tb - ts[-1]) <= 1e-1:
+                ts = np.concatenate((ts, [tb]))
+            self.t_knots.append(ts)
+
+        ## Store data
+        self.data = data
+
+    def integrate(self, x0, Phis):
+        x0 = np.asarray(x0)
+        X = [x0]
+        # Integrate along each tknot
+        for ts, phis in zip(self.t_knots, Phis):
+            phis = np.column_stack((np.diff(ts), phis))
+            xcur = X[-1]
+            for phi in phis:
+                Aphi = sum([a*f for a, f in zip(self.A, phi)])
+                xcur = np.dot(self._I + Aphi, xcur)
+            X.append(xcur)
+        X = np.array(X)
+        return X
+                
+    def _likelihood_fit(self, x0, sigmas):
+        Phis0 = []
+        for ts in self.t_knots:
+            phi = np.random.normal(size=(ts.size-1)*self.R).reshape(ts.size-1, self.R)
+            Phis0.append(phi)
+
+        def _reshape_1d_f(ff):
+            F = []
+            nt = 0
+            for ts in self.t_knots:
+                nf = (ts.size-1)*self.R
+                phi = ff[nt:(nt + nf)]
+                F.append(phi.reshape(ts.size-1, self.R))
+                nt += nf            
+            return F
+        
+        def _objfunc(ff):
+            
+            F = _reshape_1d_f(ff)
+            
+            X = self.integrate(x0, F)
+            return -np.sum([norm.logpdf(self.data.Y[:, k],
+                                       X[:, k],
+                                        s) for k, s in enumerate(sigmas)])
+
+        f0 = np.concatenate([arr.ravel() for arr in Phis0])
+
+        res = minimize(_objfunc, f0, method="Nelder-Mead")
+        if res.status != 0:
+            res = minimize(_objfunc, res.x, method="Nelder-Mead")
+        print(res.status)
+        F_res = _reshape_1d_f(res.x)
+        return F_res
+        
+
+A0 = np.array([[0., 1.],
+               [-1., 0.]])
+
+A1 = np.array([[0.1, 0.],
+               [0.0, 0.]])
+
+A2 = np.array([[0.0, 0.0],
+               [0.0, 1.1]])
+
+
+def dXdt(X, t):
+    return np.dot(A0 + A1*np.cos(t) + A2*np.exp(-(t-1)**2), X)
+
+x0 = np.array([1., 0.])
+data_times = np.array([0., 0.5, 1.3, 2.2])
+data_Y = [x0]
+for ta, tb in zip(data_times[:-1], data_times[1:]):
+    data_Y.append(odeint(dXdt, data_Y[-1], np.linspace(ta, tb, 10))[-1, ])
+data_Y = np.array(data_Y)
+
+
+obj = MyClass(np.array([A0, A1, A2]),
+              Data(data_times, data_Y),
+              0.025)
+
+
+"""
+"""
+F_res = obj._likelihood_fit(x0, [0.05, 0.05])
+for ts, phi in zip(obj.t_knots, F_res):
+    dt = np.diff(ts)
+    _phi = np.column_stack((dt, phi))
+#    print(quad(lambda t: np.exp(-(t-1)**2), ts[0], ts[-1])[0] , np.sum(phi[:, 1]))
+
+tts = np.concatenate([ts[:-1] for ts in obj.t_knots])
+phi_1 = np.concatenate([phi[:, 0] for phi in F_res])
+"""
+"""
+
+F_true = []
+for ts in obj.t_knots:
+
+    Jg1 = np.array([quad(lambda t: np.cos(t),
+                         ta, tb)[0]
+                    for ta, tb in zip(ts[:-1], ts[1:])])
+
+    Jg2 = np.array([quad(lambda t: np.exp(-(t-1)**2),
+                         ta, tb)[0]
+                    for ta, tb in zip(ts[:-1], ts[1:])])
+                                         
+    F_true.append(np.column_stack((Jg1, Jg2)))
+
+print(obj.integrate(x0, F_true) - obj.data.Y)
+#plt.plot(tts, phi_1)
+#plt.show()
+"""
+
+

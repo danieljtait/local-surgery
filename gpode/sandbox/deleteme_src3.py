@@ -1,41 +1,49 @@
 import numpy as np
-import linalg_utils
-import matrixrv_utils
+from collections import namedtuple
 from scipy.linalg import block_diag
-from gpode.kernels import GradientMultioutputKernel
+from gpode.kernels import (GradientMultioutputKernel,
+                           Kernel)
 
 
-class VarMLFM_adapGrad:
-
+class MissingDataMLFM(SimpleVarMLFM):
     def __init__(self,
-                 ModelMatrices,
-                 data_times,
-                 data_Y,
-                 sigmas,
-                 gammas,
-                 x_gp_pars,
-                 mdata=False):
+                 A,
+                 full_times,
+                 data_inds, data_Y,
+                 sigmas, gammas,
+                 x_gp_pars):
+
+        self.full_times = full_times
+        data_times = full_times[data_ind]
+
+        super(MissingDataMLFM, self).__init__(A, data_times, data_Y,
+                                              sigmas, gammas, x_gp_pars)
+
+
+class SimpleVarMLFM:
+
+    def __init__(self, A, data_times, data_Y,
+                 sigmas, gammas,
+                 x_gp_pars):
 
         _x_kernel_type = "sqexp"
 
         # Attach the data
-        self.data_times = data_times
-        self.data_Y = data_Y
+        self.data_time = data_times
+        self.data_y = data_Y
 
         # Model matrices
-        self.A = np.asarray(ModelMatrices)
+        self.A = np.asarray(A)
 
         self._R = self.A.shape[0] - 1       # R is the number of latent forces
                                             # there is an additional constant matrix
                                             # A[0]
-        self._K = self.A.shape[1]           # Observation dimension
 
-        if mdata:                           # Number of observations
-            self._N = self.full_times.size
-        else:
-            self._N = data_times.size       
+        self._K = self.A.shape[1]           # Observation dimension
+        self._N = data_times.size           # Number of observations
         
         assert(self._K == self.A.shape[2])  # Squareness check
+
 
         ###
         # For each component k we attach a GradientMultioutputKernel
@@ -53,26 +61,22 @@ class VarMLFM_adapGrad:
         # noise variables
         self._sigmas = sigmas 
 
-        
         ##
         # Attach the gradient kernel covariance objects to the class
         # - the characteristic length scale parameters (those not possessing
         #   tractable marginals, will typically not be changed during a call to
-        #   fit
-        self.missing_data = mdata
+        #   fit 
         _store_gpdx_covs(self)
         _In = np.diag(np.ones(self._N))
-
         self._X_prior_inv_covs = []
         self._dX_prior_inv_covs = []
-
         for Ldxdx, Lxx in zip(self.S_chol, self.Lxx):
 
             self._X_prior_inv_covs.append(
-                linalg_utils._back_sub(Lxx, _In))
+                _back_sub(Lxx, _In))
 
             self._dX_prior_inv_covs.append(
-                linalg_utils._back_sub(Ldxdx, _In))
+                _back_sub(Ldxdx, _In))
 
         ##################
         # Cond mean of the gradient expert corresponds to
@@ -85,20 +89,16 @@ class VarMLFM_adapGrad:
                 np.dot(Cxdx.T, Cinv)
                 )
 
+        #
         self._G_prior_inv_covs = []
-
-        if mdata:
-            tt = self.full_times
-        else:
-            tt = self.data_times
-
         for r in range(self._R):
-            cov = np.array([[np.exp(-(s-t)**2) for t in tt]
-                            for s in tt])
+            cov = np.array([[np.exp(-(s-t)**2) for t in data_times]
+                            for s in data_times])
             self._G_prior_inv_covs.append(np.linalg.inv(cov))
 
         self._init_X_var_dist()
         self._init_G_var_dist()
+
 
     def _init_X_var_dist(self, scale=0.1):
         self._X_means = [np.zeros(self._N)
@@ -127,7 +127,7 @@ class VarMLFM_adapGrad:
                     _C = np.zeros((self._N, self._N))
                 self._G_covars[(s, t)] = _C
                 self._G_covars[(t, s)] = _C
-
+            
 
     def _update_X_var_dist(self):
         # Contribution from the prior 
@@ -135,24 +135,10 @@ class VarMLFM_adapGrad:
         x_prior_inv_cov = block_diag(*(p_ic for p_ic in self._X_prior_inv_covs))
 
         # Contribution from the data
-        if self.missing_data:
-            x_data_mean = np.zeros((self._N, self._K))
-            for ind, y in zip(self.data_inds, self.data_Y):
-                x_data_mean[ind, ] = y
-            x_data_mean = x_data_mean.T.ravel()
-
-            sinv_diags = []
-            for s in self._sigmas:
-                i_diag = np.zeros(self._N)
-                i_diag[self.data_inds] = 1/s**2
-                sinv_diags.append(i_diag)
-            x_data_inv_cov = np.diag(np.concatenate(sinv_diags))
-            
-        else:
-            x_data_mean = self.data_Y.T.ravel()
-            x_data_inv_cov = np.diag(
-                np.concatenate([1/(s**2)*np.ones(self._N) for s in self._sigmas])
-                )
+        x_data_mean = self.data_y.T.ravel()
+        x_data_inv_cov = np.diag(
+            np.concatenate([1/(s**2)*np.ones(self._N) for s in self._sigmas])
+            )
 
         means = [x_prior_mean, x_data_mean]
         inv_covs = [x_prior_inv_cov, x_data_inv_cov]
@@ -169,7 +155,7 @@ class VarMLFM_adapGrad:
             means.append(m)
             inv_covs.append(ic)
 
-        mean, cov = matrixrv_utils._prod_norm_pars(means, inv_covs)
+        mean, cov = _prod_norm_pars(means, inv_covs)
 
         mean = mean.reshape(self._K, self._N)
         for i, mu in enumerate(mean):
@@ -203,7 +189,7 @@ class VarMLFM_adapGrad:
             means.append(m)
             inv_covs.append(ic)
 
-        mean, cov = matrixrv_utils._prod_norm_pars(means, inv_covs)
+        mean, cov = _prod_norm_pars(means, inv_covs)
         mean = mean.reshape(self._R, self._N)
         
         for r, mu in enumerate(mean):
@@ -218,68 +204,21 @@ class VarMLFM_adapGrad:
                 self._G_covars[(s, t)] = G_cov_st
                 self._G_covars[(t, s)] = G_cov_st.T
 
-
-class VarMLFM_adapGrad_missing_data(VarMLFM_adapGrad):
-    def __init__(self,
-                 ModelMatrices,
-                 full_times,
-                 data_inds,
-                 data_Y,
-                 sigmas,
-                 gammas,
-                 x_gp_pars):
-
-        assert(data_Y.shape[0] == len(data_inds))
-        
-        self.full_times = full_times
-        self.data_inds = np.asarray(data_inds)
-        super(VarMLFM_adapGrad_missing_data, self).__init__(ModelMatrices,
-                                                            full_times[data_inds],
-                                                            data_Y,
-                                                            sigmas,
-                                                            gammas,
-                                                            x_gp_pars,
-                                                            mdata=True)
-
-
 """
-Model Setup Utility Functions
+Model utility functions
 """
-def _store_gpdx_covs(mobj):
-    mobj.Lxx = []
-    mobj.Cxdx = []
-    mobj.S_chol = []
-
-    if mobj.missing_data:
-        tt = mobj.full_times
-    else:
-        tt = mobj.data_times
-
-    gammas = mobj._gammas
-
-    for k in range(mobj._K):
-
-        kern = mobj._x_kernels[k]
-
-        Cxx = kern.cov(0, 0, tt, tt)
-        Lxx = np.linalg.cholesky(Cxx)
-
-        Cxdx = kern.cov(0, 1, tt, tt)
-        Cdxdx = kern.cov(1, 1, tt, tt)
-
-        Cdxdx_x = Cdxdx - np.dot(Cxdx.T, linalg_utils._back_sub(Lxx, Cxdx))
-        I = np.diag(np.ones(Cdxdx_x.shape[0]))
-        S = Cdxdx_x + gammas[k]**2*I
-        S_chol = np.linalg.cholesky(S)
-
-        mobj.Lxx.append(Lxx)
-        mobj.Cxdx.append(Cxdx)
-        mobj.S_chol.append(S_chol)
-
-
-"""
-Model Fitting Utility Functions
-"""
+###################################################### 
+#                                                    #
+# returns the collection of vectors Vs = [v0,...,vR] #
+# such that                                          #
+#                                                    #
+#     fi = (v1 o g1 + ... + vR o gR) + v0            #
+#                                                    #
+######################################################
+def _fi_g_rep(X, i, A):
+    Vs_i = [sum(a[i, j]*xj for j, xj in enumerate(X.T))
+          for a in A]
+    return Vs_i
 
 ######################################################
 #                                                    #
@@ -358,34 +297,6 @@ def _get_Wi_cov(CovG_dict, i, A, K, R, N):
     return res_dict
 
 
-def _parse_component_i_for_x(i, EG, CovG,
-                             Sigma_Inv, Pi, A,
-                             K, R, N):
-
-    E_Wi = _get_Wi_mean(EG, i, A)
-    Cov_Wi = _get_Wi_cov(CovG, i, A, K, R, N)
-
-    inv_covar = np.zeros((N*K, N*K))
-    for m in range(K):
-        for n in range(K):
-            res = (Cov_Wi[(m, n)] + np.outer(E_Wi[m], E_Wi[n])) * Sigma_Inv
-
-
-            if m == i:
-                res -= np.dot(Pi.T, np.dot(Sigma_Inv, np.diag(E_Wi[n])))
-
-                if n == i:
-                    res -= np.dot(np.diag(E_Wi[m]), np.dot(Sigma_Inv, Pi))
-                    res += np.dot(Pi.T, np.dot(Sigma_Inv, Pi))
-            elif n == i:
-                res -= np.dot(np.diag(E_Wi[m]), np.dot(Sigma_Inv, Pi))
-
-            inv_covar[m*N:(m+1)*N, n*N:(n+1)*N] = res
-
-    return np.zeros(N*K), inv_covar
-
-
-
 ###
 #
 # mi = Pi xi
@@ -411,11 +322,11 @@ def _parse_component_i_for_g(i, EX, CovX,
 
     # E[Vi^T Sinv v0]
     E_ViT_Sinv_v0 = np.concatenate(
-        [matrixrv_utils._E_diagx_M_y(E_Vi[s], E_Vi[0], Cov_Vi[(s, 0)], Sigma_Inv)
+        [_E_diagx_M_y(E_Vi[s], E_Vi[0], Cov_Vi[(s, 0)], Sigma_Inv)
          for s in range(1, R+1)]
         )
     E_ViT_Sinv_Pixi = np.concatenate(
-        [matrixrv_utils._E_diagx_M_y(E_vs, np.dot(Pi, EX[i]), cvsmi, Sigma_Inv)
+        [_E_diagx_M_y(E_vs, np.dot(Pi, EX[i]), cvsmi, Sigma_Inv)
          for E_vs, cvsmi in zip(E_Vi[1:], Cov_Vi_Mi)]
         )
 
@@ -426,3 +337,136 @@ def _parse_component_i_for_g(i, EX, CovX,
         mean = np.dot(pinv, E_ViT_Sinv_Pixi - E_ViT_Sinv_v0 )
     
     return mean, inv_covar
+
+def _parse_component_i_for_x(i, EG, CovG,
+                             Sigma_Inv, Pi, A,
+                             K, R, N):
+
+    E_Wi = _get_Wi_mean(EG, i, A)
+    Cov_Wi = _get_Wi_cov(CovG, i, A, K, R, N)
+
+    inv_covar = np.zeros((N*K, N*K))
+    for m in range(K):
+        for n in range(K):
+            res = (Cov_Wi[(m, n)] + np.outer(E_Wi[m], E_Wi[n])) * Sigma_Inv
+
+
+            if m == i:
+                res -= np.dot(Pi.T, np.dot(Sigma_Inv, np.diag(E_Wi[n])))
+
+                if n == i:
+                    res -= np.dot(np.diag(E_Wi[m]), np.dot(Sigma_Inv, Pi))
+                    res += np.dot(Pi.T, np.dot(Sigma_Inv, Pi))
+            elif n == i:
+                res -= np.dot(np.diag(E_Wi[m]), np.dot(Sigma_Inv, Pi))
+
+            inv_covar[m*N:(m+1)*N, n*N:(n+1)*N] = res
+
+
+    """
+    ## Test
+    Cgg = np.row_stack((
+        np.column_stack((CovG[(s, t)] for t in range(R)))
+        for s in range(R)))
+    mgg = np.concatenate([eg for eg in EG])
+    L = np.linalg.cholesky(Cgg)
+
+    res = np.zeros((N*K, N*K))
+    _res = np.zeros((R, N))
+    nsim = 1000000
+    for nt in range(nsim):
+        z = np.dot(L, np.random.normal(size=Cgg.shape[0])) + mgg
+        rg = z.reshape(R, N)
+
+        wi = [sum(A[s+1, i, j]*g for s, g in enumerate(rg))
+              for j in range(K)]
+
+        Wi = np.column_stack((np.diag(w) for w in wi))
+        Wi[:, i*N:(i+1)*N] -= Pi
+        res += np.dot(Wi.T, np.dot(Sigma_Inv, Wi))
+        if nt % (nsim / 100) == 0:
+            print(nt)
+    res /= nsim
+    delta = abs(res - inv_covar)
+    print(np.max(delta))
+    delta[delta < 1e-3] = 0.
+    """
+
+
+    
+    return np.zeros(N*K), inv_covar
+        
+
+###
+#
+def _store_gpdx_covs(mobj):
+    mobj.Lxx = []
+    mobj.Cxdx = []
+    mobj.S_chol = []
+
+    tt = mobj.data_time
+    gammas = mobj._gammas
+
+    for k in range(mobj._K):
+
+        kern = mobj._x_kernels[k]
+
+        Cxx = kern.cov(0, 0, tt, tt)
+        Lxx = np.linalg.cholesky(Cxx)
+
+        Cxdx = kern.cov(0, 1, tt, tt)
+        Cdxdx = kern.cov(1, 1, tt, tt)
+
+        Cdxdx_x = Cdxdx - np.dot(Cxdx.T, _back_sub(Lxx, Cxdx))
+        I = np.diag(np.ones(Cdxdx_x.shape[0]))
+        S = Cdxdx_x + gammas[k]**2*I
+        S_chol = np.linalg.cholesky(S)
+
+        mobj.Lxx.append(Lxx)
+        mobj.Cxdx.append(Cxdx)
+        mobj.S_chol.append(S_chol)
+    
+    
+    
+        
+"""
+Matrix Random Variable Utils
+"""
+
+
+######################################################
+#                                                    #
+# E[diag(x) M y ] = np.sum(Exyt * M, axis=1)         #
+#                                                    #
+######################################################
+def _E_diagx_M_y(E_x, E_y, Cov_xy, M):
+    ExyT = Cov_xy + np.outer(E_x, E_y)
+    return np.sum(ExyT * M, axis=1)
+
+
+##
+# Backsub
+#
+def _back_sub(L, x):
+    return np.linalg.solve(L.T, np.linalg.solve(L, x))
+
+
+##
+#  p(x) ∝ Π N(x, means[k] | inv_covs[k])
+def _prod_norm_pars(means, inv_covs):
+    m1 = means[0]
+    C1inv = inv_covs[0]
+
+    if len(means) == 1:
+        return m1, np.linalg.inv(C1inv)
+
+    else:
+
+        for m2, C2inv in zip(means[1:], inv_covs[1:]):
+            Cnew_inv = C1inv + C2inv
+            mnew = np.linalg.solve(Cnew_inv,
+                                   np.dot(C1inv, m1) + np.dot(C2inv, m2))
+            m1 = mnew
+            C1inv = Cnew_inv
+
+        return mnew, np.linalg.inv(Cnew_inv)

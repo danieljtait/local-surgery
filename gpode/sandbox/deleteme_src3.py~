@@ -1,0 +1,4 @@
+class SimpleVarMLFM:
+
+    def __init__(self, A):
+        self.A = np.asarray()A

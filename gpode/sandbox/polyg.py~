@@ -1,0 +1,9 @@
+import numpy as np
+from scipy.integrate import quad
+
+a = 1.
+b = 1.
+
+def upx(x):
+    return np.exp(a*x**4 + b*x**2)
+

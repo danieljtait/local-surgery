@@ -1,0 +1,12 @@
+import numpy as np
+np.set_printoptions(precision=2)
+
+A0 = np.array([[0., 0.], [0., 0.]])
+A1 = np.array([[0., -1.], [1., 0.]])
+A2 = np.array([[ 0., 0.], [0., 1.]])
+
+g1 = lambda t: np.cos(t)
+g2 = lambda t: np.exp(-0.5*(t-2)**2)
+
+def dXdt(X, t):
+    return np.dot(A0 + A1*g1(t) + A2*g2(t), X)

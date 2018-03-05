@@ -22,44 +22,8 @@ redInd = np.linspace(0, ttDense.size-1, 9, dtype=np.intp)
 tt = ttDense[redInd]
 yy = sol[redInd, ]
 
-
-def _integrate(psi, x0):
-    X = [x0]
-    I = np.diag(np.ones(x0.size))
-    for f in psi:
-        X.append(np.dot(I + A1*f[0] + A2*f[1], X[-1]))
-    return np.array(X)
-
-
-fig = plt.figure()
-ax = fig.add_subplot(111)
-ax.plot(ttDense, sol, 'k-')
-
-t0ind = 5
-t0 = tt[t0ind]
-x0 = yy[t0ind, ]
-
-ss = np.linspace(t0, tt[-1], 15)
-sa = ss[:-1]
-sb = ss[1:]
-Nf = sb.size
-
-psi = []
-for _sa, _sb in zip(sa, sb):
-    J1 = quad(g1, _sa, _sb)[0]
-    J2 = quad(g2, _sa, _sb)[0]
-    psi.append([J1, J2])
-psi = np.array(psi)
-X = _integrate(psi, x0)
-
-
-
-print(psi)
-f = psi.ravel()
-print(f.reshape(Nf, 2))
-
-ax.plot(ss, X, '+')
-ax.plot(tt[t0ind:], yy[t0ind:, :], 's')
-
-plt.show()
-    
+vobj = VariationalMLFM2(5, tt, yy, .1,
+                        As=[A0, A1, A2],
+                        lscales=[3.0, 5.5],
+                        obs_noise_priors=[[2000, .5],
+                                          [2500, .5]])

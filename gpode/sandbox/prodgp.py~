@@ -1,0 +1,4 @@
+import numpy as np
+
+tt = np.linspace(0., 3., 3)
+cov = np.array([[np.exp(-(s-t)**2) for t in tt] for s in tt])

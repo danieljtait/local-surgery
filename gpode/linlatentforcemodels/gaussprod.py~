@@ -1,0 +1,12 @@
+import numpy as np
+from scipy.stats import norm, multivariate_normal
+s0 = 1.
+m0 = 1.
+
+def px(x):
+    return norm.pdf(x, m0, s0)
+
+def pxy(x, y, rho):
+    cov = np.array([[s0**2, rho*s0**2],
+                    [rho*s0**2, s0**2]])
+    

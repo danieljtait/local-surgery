@@ -1,0 +1,9 @@
+import numpy as np
+
+class PolyVarMLFM:
+
+    def __init__(self,
+                 ModelMatrices,
+                 data_time, data_Y,
+                 sigmas, gammas,
+                 x_gp_pars):
